@@ -1,7 +1,14 @@
-body { margin: 0; overflow: hidden; background-color: #000; }
+/* === BASE === */
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #000;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+}
 canvas { display: block; }
 
-/* Toggle button */
+
+/* === SETTINGS TOGGLE === */
 .gui-toggle {
     position: fixed;
     bottom: 16px;
@@ -29,7 +36,8 @@ canvas { display: block; }
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
 }
 
-/* Panel container */
+
+/* === GUI PANEL === */
 .lil-gui.root {
     position: fixed !important;
     bottom: 64px !important;
@@ -40,7 +48,6 @@ canvas { display: block; }
     transition: opacity 0.3s ease, transform 0.3s ease;
     transform-origin: bottom right;
 
-    /* Modern glass look */
     --background-color: rgba(2, 4, 12, 0.75) !important;
     --widget-color: rgba(0, 212, 255, 0.08) !important;
     --hover-color: rgba(0, 212, 255, 0.15) !important;
@@ -53,7 +60,7 @@ canvas { display: block; }
     --folder-indent: 8px !important;
     --widget-border-radius: 4px !important;
 
-    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace !important;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace !important;
     font-size: 11px !important;
     border: 1px solid rgba(0, 212, 255, 0.15) !important;
     border-radius: 10px !important;
@@ -63,14 +70,12 @@ canvas { display: block; }
         0 0 30px rgba(0, 212, 255, 0.05),
         inset 0 0 30px rgba(0, 212, 255, 0.02) !important;
 }
-
 .lil-gui.root.hidden {
     opacity: 0;
     transform: scale(0.95) translateY(10px);
     pointer-events: none;
 }
 
-/* Folder titles */
 .lil-gui .title {
     font-weight: 500 !important;
     letter-spacing: 0.5px !important;
@@ -78,8 +83,6 @@ canvas { display: block; }
     font-size: 10px !important;
     border-bottom: 1px solid rgba(0, 212, 255, 0.08) !important;
 }
-
-/* Sliders */
 .lil-gui .slider {
     border-radius: 3px !important;
 }
@@ -96,7 +99,6 @@ canvas { display: block; }
     box-shadow: 0 0 8px rgba(0, 212, 255, 0.1) !important;
 }
 
-/* Scrollbar */
 .lil-gui.root::-webkit-scrollbar { width: 4px; }
 .lil-gui.root::-webkit-scrollbar-track { background: transparent; }
 .lil-gui.root::-webkit-scrollbar-thumb {
@@ -104,28 +106,37 @@ canvas { display: block; }
     border-radius: 2px;
 }
 
-/* Node label */
+
+/* === NODE LABEL (focus) === */
 .node-label {
     position: fixed;
     z-index: 900;
     pointer-events: none;
-    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
     color: rgba(0, 212, 255, 0.9);
-    background: rgba(2, 4, 12, 0.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(0, 212, 255, 0.2);
+    background: rgba(2, 4, 12, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(0, 212, 255, 0.25);
     border-radius: 6px;
-    padding: 10px 14px;
-    min-width: 120px;
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.08);
-    animation: labelFadeIn 0.3s ease;
+    padding: 12px 16px;
+    min-width: 130px;
+    box-shadow:
+        0 0 30px rgba(0, 212, 255, 0.1),
+        inset 0 1px 0 rgba(0, 212, 255, 0.06);
+    animation: labelFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes labelFadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .node-label-header {
@@ -146,14 +157,13 @@ canvas { display: block; }
     padding: 2px 0;
     font-size: 10px;
 }
-
 .node-label-row span:first-child {
-    color: rgba(200, 220, 240, 0.5);
+    color: rgba(200, 220, 240, 0.45);
     letter-spacing: 0.5px;
 }
-
 .node-label-row span:last-child {
     color: rgba(0, 212, 255, 0.9);
+    font-weight: 500;
 }
 
 .node-label-status {
@@ -161,13 +171,167 @@ canvas { display: block; }
     padding-top: 6px;
     border-top: 1px solid rgba(0, 212, 255, 0.15);
     font-size: 9px;
-    letter-spacing: 1px;
-    color: rgba(0, 255, 180, 0.7);
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    color: rgba(0, 255, 180, 0.8);
     text-align: center;
     animation: statusPulse 2s ease-in-out infinite;
 }
 
 @keyframes statusPulse {
-    0%, 100% { opacity: 0.7; }
+    0%, 100% { opacity: 0.6; }
     50% { opacity: 1.0; }
+}
+
+
+/* === HOVER TOOLTIP === */
+.hover-tooltip {
+    position: fixed;
+    z-index: 800;
+    pointer-events: none;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: rgba(0, 212, 255, 0.85);
+    background: rgba(2, 4, 12, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 4px;
+    padding: 5px 9px;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.06);
+}
+.hover-tooltip-sep {
+    color: rgba(0, 212, 255, 0.35);
+    margin: 0 4px;
+}
+.hover-tooltip-sig {
+    color: rgba(0, 255, 225, 0.8);
+    font-weight: 500;
+}
+
+
+/* === HUD OVERLAY === */
+.hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+}
+
+/* Top left */
+.hud-top-left {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    animation: hudFadeIn 1s ease 0.5s both;
+}
+.hud-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 6px;
+    color: rgba(0, 212, 255, 0.7);
+    margin-bottom: 4px;
+}
+.hud-subtitle {
+    font-size: 9px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    color: rgba(0, 212, 255, 0.3);
+}
+
+/* Bottom left */
+.hud-bottom-left {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    animation: hudFadeIn 1s ease 0.8s both;
+}
+.hud-stats {
+    display: flex;
+    gap: 20px;
+}
+.hud-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.hud-stat-label {
+    font-size: 8px;
+    font-weight: 300;
+    letter-spacing: 1.5px;
+    color: rgba(200, 220, 240, 0.3);
+}
+.hud-stat-value {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: rgba(0, 212, 255, 0.6);
+    transition: color 0.3s ease;
+}
+
+/* Bottom right info */
+.hud-bottom-right-info {
+    position: absolute;
+    bottom: 24px;
+    right: 70px;
+    animation: hudFadeIn 1s ease 1s both;
+}
+.hud-fps {
+    font-size: 9px;
+    font-weight: 300;
+    letter-spacing: 1px;
+    color: rgba(200, 220, 240, 0.25);
+}
+
+/* Corner decorations */
+.hud-corner {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+}
+.hud-corner.tl {
+    top: -6px;
+    left: -6px;
+    border-top: 1px solid rgba(0, 212, 255, 0.25);
+    border-left: 1px solid rgba(0, 212, 255, 0.25);
+    animation: cornerPulse 4s ease-in-out infinite;
+}
+.hud-corner.bl {
+    bottom: -6px;
+    left: -6px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.25);
+    border-left: 1px solid rgba(0, 212, 255, 0.25);
+    animation: cornerPulse 4s ease-in-out 1s infinite;
+}
+.hud-corner.br {
+    bottom: -4px;
+    right: -4px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+    border-right: 1px solid rgba(0, 212, 255, 0.15);
+    animation: cornerPulse 4s ease-in-out 2s infinite;
+}
+
+@keyframes cornerPulse {
+    0%, 100% { border-color: rgba(0, 212, 255, 0.15); }
+    50% { border-color: rgba(0, 212, 255, 0.4); }
+}
+
+@keyframes hudFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+/* === FOCUSED STATE HUD HIGHLIGHT === */
+.hud-stat-value.active {
+    color: rgba(0, 255, 225, 0.9);
 }

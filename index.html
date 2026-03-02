@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magic Plasma Sphere</title>
+    <title>Sphere</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
     <script type="importmap">
     {
         "imports": {
@@ -12,18 +15,52 @@
         }
     }
     </script>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
-        canvas { display: block; }
-        .lil-gui.root {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            top: auto !important;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- HUD Overlay -->
+    <div class="hud">
+        <div class="hud-top-left">
+            <div class="hud-corner tl"></div>
+            <div class="hud-title">SPHERE</div>
+            <div class="hud-subtitle">NETWORK MONITOR v2.0</div>
+        </div>
+        <div class="hud-bottom-left">
+            <div class="hud-corner bl"></div>
+            <div class="hud-stats" id="hud-stats">
+                <div class="hud-stat">
+                    <span class="hud-stat-label">NODES</span>
+                    <span class="hud-stat-value" id="hud-nodes">400</span>
+                </div>
+                <div class="hud-stat">
+                    <span class="hud-stat-label">LINKS</span>
+                    <span class="hud-stat-value" id="hud-arcs">---</span>
+                </div>
+                <div class="hud-stat">
+                    <span class="hud-stat-label">SIGNAL</span>
+                    <span class="hud-stat-value" id="hud-signal">---</span>
+                </div>
+            </div>
+        </div>
+        <div class="hud-bottom-right-info">
+            <div class="hud-corner br"></div>
+            <span class="hud-fps" id="hud-fps">-- FPS</span>
+        </div>
+    </div>
+
+    <!-- Settings toggle -->
+    <button class="gui-toggle" title="Toggle Settings (S)">&#9881;</button>
+
+    <!-- Node label (shown on focus) -->
+    <div class="node-label" id="node-label" style="display:none;"></div>
+
+    <!-- Hover tooltip -->
+    <div class="hover-tooltip" id="hover-tooltip" style="display:none;">
+        <span class="hover-tooltip-id"></span>
+        <span class="hover-tooltip-sep">&middot;</span>
+        <span class="hover-tooltip-sig"></span>
+    </div>
+
     <script type="module" src="script.js"></script>
 </body>
 </html>

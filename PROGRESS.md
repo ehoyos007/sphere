@@ -45,8 +45,31 @@
   - Auto-rotation pauses while a node is focused
 - **Label styling** — Frosted glass card with fade-in animation, monospace font, matching cyber theme
 
+---
+
+## Session 3 — 2026-03-02
+
+**Summary:** Full visual upgrade with post-processing pipeline, energy arcs, pulse waves, HUD overlay, and tuned defaults
+
+### What was done:
+- **Post-processing pipeline** — EffectComposer with UnrealBloomPass + OutputPass (default off per user preference, available in settings)
+- **Energy arcs** — 100 curved bezier connections between nearest-neighbor nodes with animated traveling light pulses (default off)
+- **Pulse wave** — Clicking a node sends a ripple ring across the sphere surface via grid shader
+- **Atmospheric halo** — Soft breathing fresnel glow around the sphere (default off)
+- **HUD overlay** — "SPHERE / NETWORK MONITOR v2.0" title, bottom-left stats (nodes/links/signal), FPS counter, animated corner brackets
+- **Hover tooltip** — Shows node ID + signal % on mouse hover before clicking
+- **Enhanced nebula** — 3-layer simplex noise with blue/purple variation, HiDPI render target
+- **Entry animation** — Elastic pop-in from zero scale on page load
+- **JetBrains Mono** — Loaded from Google Fonts for consistent monospace UI
+- **Fixed style.css** — Was never linked in index.html; now properly referenced
+- **Expanded GUI** — New Bloom, Arcs, Halo folders with real-time controls
+- **Color sync** — Grid color changes propagate to arcs and halo
+- **Background resolution** — Render target now uses device pixel ratio for sharp nebula on Retina
+- **Tuned defaults** — User-preferred config: density 8, no bloom/arcs/halo/scan, crisp grid lines, subtle shell edge
+
 ### Current state:
 - Serving locally via `python3 -m http.server 8091`
-- All GUI controls (Grid, Scan, Shell, Animation, Nodes) functional and real-time
-- Node interaction fully working (click to focus, Escape to unfocus)
+- All GUI controls functional and real-time across 8 folders
+- Node interaction with pulse wave feedback
+- HUD + hover tooltip active
 - Files: `index.html`, `script.js`, `style.css`, `magic-plasma-sphere-three-js.markdown`, `PROGRESS.md`
