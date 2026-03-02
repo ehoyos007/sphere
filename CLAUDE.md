@@ -22,9 +22,10 @@ Interactive 3D sphere (Three.js) that visualizes daily tasks from Supabase, grou
 4. **Interaction**: Click node → `focusNode()` → camera animates → panel opens
 5. **Refresh**: Auto 60s + manual R key, preserves focused repo
 
-## Current Issues
-- **Supabase DNS**: `nkkfagxkuryusiulilqn.supabase.co` returns NXDOMAIN. Verify URL at supabase.com/dashboard → Settings → API.
-- **Repo grouping**: `groupTasksByRepo()` uses `t.repo` field. If null, all tasks go to "uncategorized". Check console `[sphere]` logs.
+## Supabase
+- Project: `esasqrcxnktvojcxyxqs` (shared with fhe-2026, stream-crm)
+- Column for date filtering: `session_date` (not `date`)
+- All tasks have `repo` field populated — `groupTasksByRepo()` works correctly
 
 ## Conventions
 - No bundler — ES modules via importmap, served with any static server

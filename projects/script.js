@@ -242,9 +242,9 @@ const params = {
     nodePulse: 0.8,
 
     // Bloom
-    bloomStrength: 0.0,
-    bloomRadius: 0.1,
-    bloomThreshold: 1.0,
+    bloomStrength: 0.15,
+    bloomRadius: 0.3,
+    bloomThreshold: 0.8,
 
     // Halo
     haloIntensity: 0.0
@@ -637,40 +637,52 @@ const gridMat = new THREE.ShaderMaterial({
             float theta = atan(p.z, p.x);
             float phi = acos(clamp(p.y, -1.0, 1.0));
 
+            // === FAINT TECHNICAL UNDERLAYER (lat/lon grid) ===
             float latLines = abs(fract(phi * uGridDensity / PI) - 0.5) * 2.0;
             float lonLines = abs(fract(theta * uGridDensity / (2.0 * PI)) - 0.5) * 2.0;
-
             float latLine = 1.0 - smoothstep(0.0, uLineWidth, latLines);
             float lonLine = 1.0 - smoothstep(0.0, uLineWidth, lonLines);
-            float latGlow = 1.0 - smoothstep(0.0, uLineWidth * uLineGlow, latLines);
-            float lonGlow = 1.0 - smoothstep(0.0, uLineWidth * uLineGlow, lonLines);
+            float techGrid = max(latLine, lonLine);
 
-            float grid = max(latLine, lonLine);
-            float glow = max(latGlow, lonGlow) * 0.3;
-            float intersection = latLine * lonLine;
+            float shimmer = snoise(vPosition * 10.0 + uTime * 0.5) * 0.15 + 0.85;
 
+            // Technical base — faint data-heavy underlayer
+            vec3 color = uColor * shimmer * techGrid * 0.15;
+            float alpha = techGrid * 0.08;
+
+            // Scan line
             float scanPos = fract(uTime * uScanSpeed);
             float scanDist = abs(phi / PI - scanPos);
             scanDist = min(scanDist, 1.0 - scanDist);
             float scan = (1.0 - smoothstep(0.0, uScanWidth, scanDist)) * uScanIntensity;
+            color += uAccent * scan * 0.3;
+            alpha += scan * 0.08;
 
-            float pulse = sin(theta * 8.0 + uTime * 3.0) * 0.5 + 0.5;
-            pulse *= latLine * 0.4;
-
-            float shimmer = snoise(vPosition * 10.0 + uTime * 0.5) * 0.15 + 0.85;
-
-            vec3 baseColor = uColor * shimmer;
-            vec3 color = baseColor * (grid + glow);
-            color += uAccent * intersection * 0.6;
-            color += uAccent * scan * 0.6;
-            color += baseColor * pulse;
-
+            // Fresnel rim — subtle edge glow
             float fresnel = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.0);
-            color += uColor * fresnel * 0.3;
+            color += uColor * fresnel * 0.15;
+            alpha += fresnel * 0.08;
 
-            float alpha = grid + glow + intersection * 0.15 + scan * 0.2 + fresnel * 0.15;
+            // === HEX CELL GRID (primary surface geometry) ===
+            float hexScale = 14.0;
+            vec2 hexUV = vec2(theta / (2.0 * PI), phi / PI) * hexScale;
+            vec2 r = vec2(1.0, 1.732);
+            vec2 h = r * 0.5;
+            vec2 a = mod(hexUV, r) - h;
+            vec2 b = mod(hexUV - h, r) - h;
+            vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+            float hexDist = max(abs(gv.x), abs(gv.y) * 0.866025 + abs(gv.x) * 0.5);
 
-            // Dark halo: suppress grid near node positions
+            float hexFill = 1.0 - smoothstep(0.30, 0.36, hexDist);
+            float edgeCore = 1.0 - smoothstep(0.32, 0.42, hexDist);
+            float edgeOuter = 1.0 - smoothstep(0.26, 0.48, hexDist);
+            float hexGlow = max(edgeOuter - edgeCore, 0.0);
+            float innerGlow = smoothstep(0.0, 0.35, hexDist);
+
+            // Breathing animation on hex borders
+            float breathe = 0.93 + 0.07 * sin(uTime * 0.8);
+
+            // === DARK HALO: suppress near node positions ===
             for (int i = 0; i < 16; i++) {
                 if (i >= uNodeCount) break;
                 float angDist = acos(clamp(dot(p, normalize(uNodePositions[i])), -1.0, 1.0));
@@ -679,8 +691,9 @@ const gridMat = new THREE.ShaderMaterial({
                 alpha *= suppress;
             }
 
-            // Territory regions — Voronoi ownership
+            // === TERRITORY NEON CASINGS ===
             if (uNodeCount > 0) {
+                // Voronoi ownership
                 float nearDist = 99.0;
                 float secondDist = 99.0;
                 int nearIdx = 0;
@@ -698,30 +711,50 @@ const gridMat = new THREE.ShaderMaterial({
 
                 vec3 tintColor = uNodeColors[nearIdx];
                 float zoomFactor = smoothstep(3.0, 1.2, uCameraDist);
+                float hexIntensity = 0.75 + 0.25 * zoomFactor;
 
-                // Territory tint — smooth color overlay
-                float tintStrength = smoothstep(0.8, 0.0, nearDist / max(secondDist, 0.001)) * (0.25 + zoomFactor * 0.25);
-                color = mix(color, color * tintColor * 3.0, tintStrength);
+                // Volumetric casing fill — very faint colored interior
+                float fillStrength = 0.03 * hexIntensity;
+                color += tintColor * hexFill * fillStrength;
+                alpha += hexFill * fillStrength * 0.2;
 
-                // Hex cell overlay — appears on zoom-in
-                float hexScale = 40.0;
-                vec2 hexUV = vec2(theta / (2.0 * PI), phi / PI) * hexScale;
-                vec2 r = vec2(1.0, 1.732);
-                vec2 h = r * 0.5;
-                vec2 a = mod(hexUV, r) - h;
-                vec2 b = mod(hexUV - h, r) - h;
-                vec2 gv = dot(a, a) < dot(b, b) ? a : b;
-                float hexEdge = 1.0 - smoothstep(0.38, 0.42, max(abs(gv.x), abs(gv.y) * 0.577));
-                color += tintColor * hexEdge * zoomFactor * 0.3;
-                alpha += hexEdge * zoomFactor * 0.15;
+                // Inner glow — subtle depth near edges
+                float volumetric = innerGlow * hexFill * 0.02 * hexIntensity;
+                color += tintColor * volumetric;
+                alpha += volumetric * 0.08;
 
-                // Voronoi boundary glow
+                // Luminous neon borders — 3 emissive layers with breathing
+                // Layer 1: Tight bright core (neon tube)
+                float coreStrength = edgeCore * 0.35 * hexIntensity * breathe;
+                color += tintColor * coreStrength * 1.5;
+                alpha += coreStrength * 0.4;
+
+                // Layer 2: Softer bloom spread
+                float bloomSpread = hexGlow * 0.15 * hexIntensity * breathe;
+                color += tintColor * bloomSpread * 0.6;
+                alpha += bloomSpread * 0.12;
+
+                // Layer 3: Wide diffuse halo (very subtle)
+                float wideHalo = max((1.0 - smoothstep(0.26, 0.52, hexDist)) - hexFill, 0.0);
+                float haloStrength = wideHalo * 0.04 * hexIntensity;
+                color += tintColor * haloStrength * 0.3;
+                alpha += haloStrength * 0.04;
+
+                // Voronoi boundary glow — seam between territories
                 float borderDist = secondDist - nearDist;
-                float border = 1.0 - smoothstep(0.0, 0.03, borderDist);
-                color += tintColor * border * 0.4;
-                alpha += border * 0.2;
+                float border = 1.0 - smoothstep(0.0, 0.05, borderDist);
+                color += tintColor * border * 0.5 * breathe;
+                alpha += border * 0.25;
+                float borderWide = 1.0 - smoothstep(0.0, 0.10, borderDist);
+                color += tintColor * borderWide * 0.1;
+                alpha += borderWide * 0.05;
+            } else {
+                // No territories loaded — neutral hex outline
+                color += uColor * edgeCore * 0.25 * breathe;
+                alpha += edgeCore * 0.15;
             }
 
+            // === PULSE WAVE ===
             if (uPulseTime >= 0.0 && uPulseTime < 2.0) {
                 float angDist = acos(clamp(dot(p, uPulseOrigin), -1.0, 1.0));
                 float pulseRadius = uPulseTime * 2.5;
@@ -731,8 +764,9 @@ const gridMat = new THREE.ShaderMaterial({
                 alpha += pulseRing * pulseFade * 0.4;
             }
 
-            alpha = clamp(alpha, 0.0, 1.0);
-            gl_FragColor = vec4(color * uBrightness, alpha);
+            alpha = clamp(alpha, 0.0, 0.7);
+            color = min(color * uBrightness, vec3(1.2));
+            gl_FragColor = vec4(color, alpha);
         }
     `,
     transparent: true,
@@ -965,6 +999,128 @@ function buildNodes() {
         document.body.appendChild(label);
         nodeLabels.push(label);
     }
+
+    // Build connection filaments after nodes are placed
+    buildFilaments();
+}
+
+
+// ============================================================
+// CONNECTION FILAMENTS — neon arcs between nearby nodes
+// ============================================================
+let filamentMesh = null;
+let filamentGeo = null;
+let filamentMat = null;
+
+function slerp(a, b, t) {
+    const d = Math.max(-1, Math.min(1, a.dot(b)));
+    const omega = Math.acos(d);
+    if (omega < 0.001) return a.clone().lerp(b, t);
+    const sinO = Math.sin(omega);
+    return a.clone().multiplyScalar(Math.sin((1 - t) * omega) / sinO)
+        .add(b.clone().multiplyScalar(Math.sin(t * omega) / sinO));
+}
+
+function buildFilaments() {
+    if (filamentMesh) {
+        mainGroup.remove(filamentMesh);
+        filamentGeo.dispose();
+        filamentMat.dispose();
+        filamentMesh = null;
+    }
+
+    if (nodeCount < 2) return;
+
+    const ARC_SEGS = 32;
+    const ARC_R = 0.97;
+    const MAX_ANGLE = Math.PI * 0.75;
+
+    // Find connectable pairs
+    const pairs = [];
+    for (let i = 0; i < nodeCount; i++) {
+        const pi = new THREE.Vector3(nodePos[i * 3], nodePos[i * 3 + 1], nodePos[i * 3 + 2]);
+        for (let j = i + 1; j < nodeCount; j++) {
+            const pj = new THREE.Vector3(nodePos[j * 3], nodePos[j * 3 + 1], nodePos[j * 3 + 2]);
+            const ang = Math.acos(Math.min(1, Math.max(-1, pi.dot(pj))));
+            if (ang < MAX_ANGLE) pairs.push({ i, j, pi: pi.clone(), pj: pj.clone() });
+        }
+    }
+
+    if (pairs.length === 0) return;
+
+    const totalVerts = pairs.length * (ARC_SEGS + 1);
+    const positions = new Float32Array(totalVerts * 3);
+    const colors = new Float32Array(totalVerts * 3);
+    const arcProgress = new Float32Array(totalVerts);
+    const arcPhase = new Float32Array(totalVerts);
+    const indices = [];
+
+    let vi = 0;
+    for (const pair of pairs) {
+        const phase = Math.random() * Math.PI * 2;
+        const colI = new THREE.Color(projects[pair.i].color);
+        const colJ = new THREE.Color(projects[pair.j].color);
+
+        for (let s = 0; s <= ARC_SEGS; s++) {
+            const t = s / ARC_SEGS;
+            const pt = slerp(pair.pi, pair.pj, t).normalize().multiplyScalar(ARC_R);
+
+            positions[vi * 3]     = pt.x;
+            positions[vi * 3 + 1] = pt.y;
+            positions[vi * 3 + 2] = pt.z;
+
+            const col = colI.clone().lerp(colJ, t);
+            colors[vi * 3]     = col.r;
+            colors[vi * 3 + 1] = col.g;
+            colors[vi * 3 + 2] = col.b;
+
+            arcProgress[vi] = t;
+            arcPhase[vi] = phase;
+
+            if (s > 0) indices.push(vi - 1, vi);
+            vi++;
+        }
+    }
+
+    filamentGeo = new THREE.BufferGeometry();
+    filamentGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    filamentGeo.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+    filamentGeo.setAttribute('aProgress', new THREE.BufferAttribute(arcProgress, 1));
+    filamentGeo.setAttribute('aPhase', new THREE.BufferAttribute(arcPhase, 1));
+    filamentGeo.setIndex(indices);
+
+    filamentMat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: `
+            uniform float uTime;
+            attribute vec3 aColor;
+            attribute float aProgress;
+            attribute float aPhase;
+            varying vec3 vColor;
+            varying float vAlpha;
+
+            void main() {
+                vColor = aColor;
+                float wave = sin((aProgress - uTime * 0.6 + aPhase) * 6.283 * 2.0) * 0.5 + 0.5;
+                float edgeFade = aProgress * (1.0 - aProgress) * 4.0;
+                vAlpha = wave * edgeFade * 0.45;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            varying vec3 vColor;
+            varying float vAlpha;
+            void main() {
+                gl_FragColor = vec4(vColor * 1.5, vAlpha);
+            }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+
+    filamentMesh = new THREE.LineSegments(filamentGeo, filamentMat);
+    mainGroup.add(filamentMesh);
 }
 
 
@@ -1245,9 +1401,8 @@ function updateNodeLabels() {
         const screenPos = worldPos.clone().project(camera);
 
         const behind = screenPos.z > 1;
-        const hidden = behind || (focusedNodeIndex !== -1 && focusedNodeIndex !== i);
 
-        if (hidden) {
+        if (behind) {
             nodeLabels[i].style.opacity = '0';
             continue;
         }
@@ -1261,16 +1416,17 @@ function updateNodeLabels() {
         const depthFade = THREE.MathUtils.smoothstep(screenPos.z, 0.98, 0.995);
         const baseOpacity = 1.0 - depthFade * 0.7;
         const isHovered = i === hoveredNodeIndex;
-        const opacity = isHovered ? 1.0 : baseOpacity * 0.85;
+        const isFocusedDimmed = focusedNodeIndex !== -1 && focusedNodeIndex !== i;
+        const opacity = isHovered ? 1.0 : isFocusedDimmed ? 0.3 : baseOpacity * 0.85;
 
         nodeLabels[i].style.opacity = String(opacity);
         nodeLabels[i].classList.toggle('hovered', isHovered);
 
-        if (isHovered) {
-            nodeLabels[i].style.color = projects[i].color;
-        } else {
-            nodeLabels[i].style.color = '';
-        }
+        // Always set territory color for neon glow
+        const col = projects[i].color;
+        nodeLabels[i].style.color = col;
+        nodeLabels[i].style.background = col + '15';
+        nodeLabels[i].style.borderColor = col + '30';
     }
 }
 
@@ -1749,6 +1905,7 @@ function animate() {
     starMat.uniforms.uTime.value = t;
     gridMat.uniforms.uTime.value = t * params.timeScale;
     if (nodeMat) nodeMat.uniforms.uTime.value = t * params.timeScale;
+    if (filamentMat) filamentMat.uniforms.uTime.value = t * params.timeScale;
     haloMat.uniforms.uTime.value = t;
 
     // Pulse wave
