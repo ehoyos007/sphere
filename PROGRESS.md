@@ -160,3 +160,45 @@
 - Supabase unreachable (DNS NXDOMAIN) — app falls back to sample data
 - Repo nav panel working with sample data (3 repos: sphere, fhe-studio, ally-api)
 - Next step: fix Supabase URL in `projects/config.js`, then verify repo grouping with live data
+
+---
+
+## Session 6 — 2026-03-02
+
+**Summary:** Fixed Supabase DNS and column name bugs — live data now working (47 tasks, 7 repos)
+
+### What was done:
+- **Fixed Supabase project URL** — `config.js` was pointing to wrong project (`nkkfagxkuryusiulilqn.supabase.co` → `esasqrcxnktvojcxyxqs.supabase.co`). DNS NXDOMAIN resolved.
+- **Fixed date column name** — `fetchTodaySession()` was querying `date` column but the actual Supabase column is `session_date`. Updated the filter accordingly.
+- **Verified live data** — 47 tasks across 7 repos loading correctly, zero null repos, repo grouping confirmed working.
+- Updated CLAUDE.md with correct Supabase project ID and `session_date` column note.
+- Updated TASKS.md and CONTEXT.md to reflect fixes.
+
+### Current state:
+- Live Supabase data fully working — 47 tasks, 7 repos
+- All features operational: repo nav, task panel, status cycling, auto-refresh
+- Serving at `http://localhost:8090/projects/index.html`
+
+---
+
+## Session 7 — 2026-03-02
+
+**Summary:** Implemented repo territory regions on sphere surface with Voronoi ownership, hex cell overlay, and zoom-adaptive transitions
+
+### What was done:
+- **Voronoi territory ownership** — Each fragment on the sphere finds its nearest repo node (angular distance), coloring that region with the repo's color
+- **Territory tint** — Smooth color overlay on the grid that fades toward boundaries; strength increases on zoom-in
+- **Hex cell overlay** — Hex grid computed in spherical UV space, edges glow with territory color, only visible when camera is close (`smoothstep(3.0, 1.2, cameraDist)`)
+- **Voronoi boundary glow** — Bright colored edges where two repo territories meet
+- **Zoom-adaptive blend** — Far view shows subtle Voronoi tint only; zooming in reveals hex cells gradually
+- **New uniforms** — `uNodeColors[16]` (RGB per node) and `uCameraDist` (camera distance from origin)
+- **Color population** — `buildNodes()` reads each project's `color` into the shader uniform array
+- **Camera distance update** — Animation loop pipes `camera.position.length()` to the shader each frame
+
+### Modified files:
+- `projects/script.js` — grid shader (fragment + uniforms), `buildNodes()`, animation loop
+
+### Current state:
+- Territory regions visible on sphere, each repo claims a Voronoi cell
+- Hex cells appear on zoom-in, fade on zoom-out
+- All existing features unaffected (dark halos, pulse waves, node focus, task panels)

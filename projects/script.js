@@ -28,9 +28,9 @@ try {
 // SUPABASE DATA LAYER
 // ============================================================
 const REPO_COLORS = [
-    '#00d4ff', '#00ffe1', '#a78bfa', '#f472b6', '#fb923c',
-    '#4ade80', '#facc15', '#f87171', '#38bdf8', '#c084fc',
-    '#34d399', '#fbbf24', '#818cf8', '#fb7185', '#2dd4bf'
+    '#60a5fa', '#a78bfa', '#f472b6', '#fb923c', '#4ade80',
+    '#facc15', '#f87171', '#00d4ff', '#c084fc', '#34d399',
+    '#fbbf24', '#818cf8', '#fb7185', '#2dd4bf', '#38bdf8'
 ];
 
 async function supaFetch(path) {
@@ -46,7 +46,7 @@ async function supaFetch(path) {
 
 async function fetchTodaySession() {
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
-    const data = await supaFetch(`daily_sessions?date=eq.${today}&select=id`);
+    const data = await supaFetch(`daily_sessions?session_date=eq.${today}&select=id`);
     return data[0] || null;
 }
 
@@ -587,7 +587,11 @@ const gridMat = new THREE.ShaderMaterial({
         uScanWidth: { value: params.scanWidth },
         uScanIntensity: { value: params.scanIntensity },
         uPulseOrigin: { value: new THREE.Vector3(0, 1, 0) },
-        uPulseTime: { value: -1.0 }
+        uPulseTime: { value: -1.0 },
+        uNodePositions: { value: Array.from({ length: 16 }, () => new THREE.Vector3()) },
+        uNodeCount: { value: 0 },
+        uNodeColors: { value: Array.from({ length: 16 }, () => new THREE.Vector3()) },
+        uCameraDist: { value: 3.0 }
     },
     vertexShader: `
         varying vec3 vPosition;
@@ -617,6 +621,10 @@ const gridMat = new THREE.ShaderMaterial({
         uniform float uScanIntensity;
         uniform vec3 uPulseOrigin;
         uniform float uPulseTime;
+        uniform vec3 uNodePositions[16];
+        uniform int uNodeCount;
+        uniform vec3 uNodeColors[16];
+        uniform float uCameraDist;
 
         varying vec3 vPosition;
         varying vec3 vNormal;
@@ -653,14 +661,66 @@ const gridMat = new THREE.ShaderMaterial({
 
             vec3 baseColor = uColor * shimmer;
             vec3 color = baseColor * (grid + glow);
-            color += uAccent * intersection * 2.0;
+            color += uAccent * intersection * 0.6;
             color += uAccent * scan * 0.6;
             color += baseColor * pulse;
 
             float fresnel = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.0);
             color += uColor * fresnel * 0.3;
 
-            float alpha = grid + glow + intersection * 0.5 + scan * 0.2 + fresnel * 0.15;
+            float alpha = grid + glow + intersection * 0.15 + scan * 0.2 + fresnel * 0.15;
+
+            // Dark halo: suppress grid near node positions
+            for (int i = 0; i < 16; i++) {
+                if (i >= uNodeCount) break;
+                float angDist = acos(clamp(dot(p, normalize(uNodePositions[i])), -1.0, 1.0));
+                float suppress = smoothstep(0.04, 0.12, angDist);
+                color *= suppress;
+                alpha *= suppress;
+            }
+
+            // Territory regions — Voronoi ownership
+            if (uNodeCount > 0) {
+                float nearDist = 99.0;
+                float secondDist = 99.0;
+                int nearIdx = 0;
+                for (int i = 0; i < 16; i++) {
+                    if (i >= uNodeCount) break;
+                    float d = acos(clamp(dot(p, normalize(uNodePositions[i])), -1.0, 1.0));
+                    if (d < nearDist) {
+                        secondDist = nearDist;
+                        nearIdx = i;
+                        nearDist = d;
+                    } else if (d < secondDist) {
+                        secondDist = d;
+                    }
+                }
+
+                vec3 tintColor = uNodeColors[nearIdx];
+                float zoomFactor = smoothstep(3.0, 1.2, uCameraDist);
+
+                // Territory tint — smooth color overlay
+                float tintStrength = smoothstep(0.8, 0.0, nearDist / max(secondDist, 0.001)) * (0.25 + zoomFactor * 0.25);
+                color = mix(color, color * tintColor * 3.0, tintStrength);
+
+                // Hex cell overlay — appears on zoom-in
+                float hexScale = 40.0;
+                vec2 hexUV = vec2(theta / (2.0 * PI), phi / PI) * hexScale;
+                vec2 r = vec2(1.0, 1.732);
+                vec2 h = r * 0.5;
+                vec2 a = mod(hexUV, r) - h;
+                vec2 b = mod(hexUV - h, r) - h;
+                vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+                float hexEdge = 1.0 - smoothstep(0.38, 0.42, max(abs(gv.x), abs(gv.y) * 0.577));
+                color += tintColor * hexEdge * zoomFactor * 0.3;
+                alpha += hexEdge * zoomFactor * 0.15;
+
+                // Voronoi boundary glow
+                float borderDist = secondDist - nearDist;
+                float border = 1.0 - smoothstep(0.0, 0.03, borderDist);
+                color += tintColor * border * 0.4;
+                alpha += border * 0.2;
+            }
 
             if (uPulseTime >= 0.0 && uPulseTime < 2.0) {
                 float angDist = acos(clamp(dot(p, uPulseOrigin), -1.0, 1.0));
@@ -854,7 +914,10 @@ function buildNodes() {
             varying float vHover;
             void main() {
                 vec2 uv = gl_PointCoord - vec2(0.5);
-                float dist = length(uv);
+                // Hexagonal distance for distinct shape
+                vec2 a = abs(uv);
+                float dist = max(a.x * 0.866025 + a.y * 0.5, a.y);
+                dist *= 1.15;
                 if (dist > 0.5) discard;
 
                 float core = 1.0 - smoothstep(0.0, 0.10, dist);
@@ -877,6 +940,21 @@ function buildNodes() {
 
     nodes = new THREE.Points(nodeGeo, nodeMat);
     mainGroup.add(nodes);
+
+    // Populate grid halo uniforms with node positions
+    const haloPositions = gridMat.uniforms.uNodePositions.value;
+    const haloCount = Math.min(nodeCount, 16);
+    for (let i = 0; i < haloCount; i++) {
+        haloPositions[i].set(nodePos[i * 3], nodePos[i * 3 + 1], nodePos[i * 3 + 2]);
+    }
+    gridMat.uniforms.uNodeCount.value = haloCount;
+
+    // Populate grid territory color uniforms
+    const haloColors = gridMat.uniforms.uNodeColors.value;
+    for (let i = 0; i < haloCount; i++) {
+        const col = new THREE.Color(projects[i].color);
+        haloColors[i].set(col.r, col.g, col.b);
+    }
 
     // Create floating labels
     for (let i = 0; i < nodeCount; i++) {
@@ -1183,7 +1261,7 @@ function updateNodeLabels() {
         const depthFade = THREE.MathUtils.smoothstep(screenPos.z, 0.98, 0.995);
         const baseOpacity = 1.0 - depthFade * 0.7;
         const isHovered = i === hoveredNodeIndex;
-        const opacity = isHovered ? 1.0 : baseOpacity * 0.6;
+        const opacity = isHovered ? 1.0 : baseOpacity * 0.85;
 
         nodeLabels[i].style.opacity = String(opacity);
         nodeLabels[i].classList.toggle('hovered', isHovered);
@@ -1328,14 +1406,20 @@ function updateFocusAnimation(dt) {
 function updateFocusRing(t) {
     if (focusedNodeIndex === -1) return;
 
-    const worldPos = getNodeWorldPos(focusedNodeIndex);
-    const normal = worldPos.clone().normalize();
+    // Read local position directly from geometry (already in mainGroup space)
+    const pos = nodeGeo.attributes.position;
+    const localPos = new THREE.Vector3(pos.getX(focusedNodeIndex), pos.getY(focusedNodeIndex), pos.getZ(focusedNodeIndex));
 
-    focusRing.position.copy(worldPos.clone().sub(mainGroup.position));
-    focusRing2.position.copy(focusRing.position);
+    focusRing.position.copy(localPos);
+    focusRing2.position.copy(localPos);
 
-    focusRing.lookAt(focusRing.position.clone().add(normal));
-    focusRing2.lookAt(focusRing2.position.clone().add(normal));
+    // lookAt expects world-space target — convert local outward normal to world
+    const normal = localPos.clone().normalize();
+    const lookTarget = localPos.clone().add(normal);
+    mainGroup.localToWorld(lookTarget);
+
+    focusRing.lookAt(lookTarget);
+    focusRing2.lookAt(lookTarget);
 
     focusRing.rotateZ(t * 0.5);
     focusRing2.rotateZ(-t * 0.3);
@@ -1680,6 +1764,23 @@ function animate() {
     stars3.rotation.y = t * 0.003;
 
     gridMesh.rotation.y = t * 0.01;
+
+    // Update grid halo uniforms — transform node positions into grid-local space
+    if (nodeCount > 0) {
+        const gridRotY = -t * 0.01; // inverse of gridMesh.rotation.y
+        const cosR = Math.cos(gridRotY);
+        const sinR = Math.sin(gridRotY);
+        const haloPositions = gridMat.uniforms.uNodePositions.value;
+        const haloCount = Math.min(nodeCount, 16);
+        for (let i = 0; i < haloCount; i++) {
+            const x = nodePos[i * 3];
+            const y = nodePos[i * 3 + 1];
+            const z = nodePos[i * 3 + 2];
+            // Rotate by inverse of grid Y rotation
+            haloPositions[i].set(x * cosR + z * sinR, y, -x * sinR + z * cosR);
+        }
+        gridMat.uniforms.uCameraDist.value = camera.position.length();
+    }
 
     // Auto-rotation (paused during focus)
     if (focusedNodeIndex === -1 && !isFocusing) {
