@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projects Sphere</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- HUD Overlay -->
+    <div class="hud">
+        <div class="hud-top-left">
+            <div class="hud-corner tl"></div>
+            <div class="hud-title">PROJECTS</div>
+            <div class="hud-subtitle">PROJECT MANAGER</div>
+        </div>
+        <div class="hud-bottom-left">
+            <div class="hud-corner bl"></div>
+            <div class="hud-stats" id="hud-stats">
+                <div class="hud-stat">
+                    <span class="hud-stat-label">PROJECTS</span>
+                    <span class="hud-stat-value" id="hud-projects">--</span>
+                </div>
+                <div class="hud-stat">
+                    <span class="hud-stat-label">ACTIVE</span>
+                    <span class="hud-stat-value" id="hud-active">--</span>
+                </div>
+                <div class="hud-stat">
+                    <span class="hud-stat-label">COMPLETION</span>
+                    <span class="hud-stat-value" id="hud-completion">--</span>
+                </div>
+            </div>
+        </div>
+        <div class="hud-bottom-right-info">
+            <div class="hud-corner br"></div>
+            <span class="hud-fps" id="hud-fps">-- FPS</span>
+        </div>
+    </div>
+
+    <!-- Settings toggle -->
+    <button class="gui-toggle" title="Toggle Settings (S)">&#9881;</button>
+
+    <!-- Hover tooltip -->
+    <div class="hover-tooltip" id="hover-tooltip" style="display:none;">
+        <span class="hover-tooltip-id"></span>
+        <span class="hover-tooltip-sep">&middot;</span>
+        <span class="hover-tooltip-sig"></span>
+    </div>
+
+    <!-- Project detail panel -->
+    <div class="project-panel" id="project-panel">
+        <div class="project-panel-header">
+            <span class="project-panel-dot">&#9632;</span>
+            <span class="project-panel-name" id="panel-name"></span>
+        </div>
+        <div class="project-panel-meta">
+            <div class="project-panel-row">
+                <span>Status</span>
+                <span class="project-panel-status" id="panel-status"></span>
+            </div>
+            <div class="project-panel-progress-row">
+                <span>Progress</span>
+                <span class="project-panel-pct" id="panel-pct"></span>
+            </div>
+            <div class="project-panel-bar">
+                <div class="project-panel-bar-fill" id="panel-bar-fill"></div>
+            </div>
+        </div>
+        <div class="project-panel-divider"></div>
+        <div class="project-panel-tasks-header">TASKS</div>
+        <div class="project-panel-tasks" id="panel-tasks"></div>
+        <div class="project-panel-add" id="panel-add">
+            <button class="project-panel-add-btn" id="panel-add-btn">+ Add task</button>
+            <div class="project-panel-add-input" id="panel-add-input" style="display:none;">
+                <input type="text" id="panel-new-task" placeholder="Task name..." autocomplete="off">
+            </div>
+        </div>
+        <div class="project-panel-footer">ESC to close</div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
