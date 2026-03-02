@@ -22,23 +22,27 @@
     <div class="hud">
         <div class="hud-top-left">
             <div class="hud-corner tl"></div>
-            <div class="hud-title">PROJECTS</div>
-            <div class="hud-subtitle">PROJECT MANAGER</div>
+            <div class="hud-title">DAILY TASKS</div>
+            <div class="hud-subtitle">SESSION MANAGER</div>
         </div>
         <div class="hud-bottom-left">
             <div class="hud-corner bl"></div>
             <div class="hud-stats" id="hud-stats">
                 <div class="hud-stat">
-                    <span class="hud-stat-label">PROJECTS</span>
-                    <span class="hud-stat-value" id="hud-projects">--</span>
+                    <span class="hud-stat-label">REPOS</span>
+                    <span class="hud-stat-value" id="hud-repos">--</span>
                 </div>
                 <div class="hud-stat">
-                    <span class="hud-stat-label">ACTIVE</span>
-                    <span class="hud-stat-value" id="hud-active">--</span>
+                    <span class="hud-stat-label">IN PROGRESS</span>
+                    <span class="hud-stat-value" id="hud-wip">--</span>
                 </div>
                 <div class="hud-stat">
                     <span class="hud-stat-label">COMPLETION</span>
                     <span class="hud-stat-value" id="hud-completion">--</span>
+                </div>
+                <div class="hud-stat">
+                    <span class="hud-stat-label">SOURCE</span>
+                    <span class="data-source-indicator" id="data-source">--</span>
                 </div>
             </div>
         </div>
@@ -51,11 +55,27 @@
     <!-- Settings toggle -->
     <button class="gui-toggle" title="Toggle Settings (S)">&#9881;</button>
 
+    <!-- Refresh button -->
+    <button class="refresh-btn" id="refresh-btn" title="Refresh data (R)">
+        <span class="refresh-icon">&#8635;</span>
+    </button>
+
     <!-- Hover tooltip -->
     <div class="hover-tooltip" id="hover-tooltip" style="display:none;">
         <span class="hover-tooltip-id"></span>
         <span class="hover-tooltip-sep">&middot;</span>
         <span class="hover-tooltip-sig"></span>
+    </div>
+
+    <!-- Repo navigation panel -->
+    <div class="repo-nav" id="repo-nav">
+        <div class="repo-nav-header">
+            <span class="repo-nav-title">REPOSITORIES</span>
+            <button class="repo-nav-toggle" id="repo-nav-toggle" title="Toggle repo list (Tab)">
+                <span class="repo-nav-toggle-icon">&#9776;</span>
+            </button>
+        </div>
+        <div class="repo-nav-list" id="repo-nav-list"></div>
     </div>
 
     <!-- Project detail panel -->
@@ -65,10 +85,6 @@
             <span class="project-panel-name" id="panel-name"></span>
         </div>
         <div class="project-panel-meta">
-            <div class="project-panel-row">
-                <span>Status</span>
-                <span class="project-panel-status" id="panel-status"></span>
-            </div>
             <div class="project-panel-progress-row">
                 <span>Progress</span>
                 <span class="project-panel-pct" id="panel-pct"></span>
@@ -80,12 +96,6 @@
         <div class="project-panel-divider"></div>
         <div class="project-panel-tasks-header">TASKS</div>
         <div class="project-panel-tasks" id="panel-tasks"></div>
-        <div class="project-panel-add" id="panel-add">
-            <button class="project-panel-add-btn" id="panel-add-btn">+ Add task</button>
-            <div class="project-panel-add-input" id="panel-add-input" style="display:none;">
-                <input type="text" id="panel-new-task" placeholder="Task name..." autocomplete="off">
-            </div>
-        </div>
         <div class="project-panel-footer">ESC to close</div>
     </div>
 

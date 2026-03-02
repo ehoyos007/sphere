@@ -8,128 +8,207 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 
 // ============================================================
-// PROJECT DATA
+// SUPABASE CONFIG
 // ============================================================
-const STORAGE_KEY = 'sphere-projects';
+let SUPABASE_URL = '';
+let SUPABASE_ANON_KEY = '';
+let isLive = false;
 
+try {
+    const config = await import('./config.js');
+    SUPABASE_URL = config.SUPABASE_URL;
+    SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY;
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) isLive = true;
+} catch (e) {
+    console.warn('No config.js found — using sample data');
+}
+
+
+// ============================================================
+// SUPABASE DATA LAYER
+// ============================================================
+const REPO_COLORS = [
+    '#00d4ff', '#00ffe1', '#a78bfa', '#f472b6', '#fb923c',
+    '#4ade80', '#facc15', '#f87171', '#38bdf8', '#c084fc',
+    '#34d399', '#fbbf24', '#818cf8', '#fb7185', '#2dd4bf'
+];
+
+async function supaFetch(path) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+    });
+    if (!res.ok) throw new Error(`Supabase ${res.status}`);
+    return res.json();
+}
+
+async function fetchTodaySession() {
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
+    const data = await supaFetch(`daily_sessions?date=eq.${today}&select=id`);
+    return data[0] || null;
+}
+
+async function fetchSessionTasks(sessionId) {
+    return supaFetch(
+        `daily_session_tasks?session_id=eq.${sessionId}&select=*&order=priority.asc,created_at.asc`
+    );
+}
+
+async function patchTaskStatus(taskId, status) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/daily_session_tasks?id=eq.${taskId}`, {
+        method: 'PATCH',
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ status })
+    });
+    if (!res.ok) throw new Error(`PATCH failed ${res.status}`);
+}
+
+function groupTasksByRepo(tasks) {
+    const repoMap = {};
+    tasks.forEach(t => {
+        const repo = t.repo || 'uncategorized';
+        if (!repoMap[repo]) repoMap[repo] = [];
+        repoMap[repo].push(t);
+    });
+
+    return Object.entries(repoMap).map(([repo, repoTasks], idx) => {
+        // Separate parents and subtasks
+        const parentTasks = repoTasks.filter(t => !t.parent_task_id);
+        const subtaskMap = {};
+        repoTasks.filter(t => t.parent_task_id).forEach(t => {
+            if (!subtaskMap[t.parent_task_id]) subtaskMap[t.parent_task_id] = [];
+            subtaskMap[t.parent_task_id].push(t);
+        });
+
+        // Attach subtasks to parents
+        const structured = parentTasks.map(p => ({
+            ...p,
+            subtasks: subtaskMap[p.id] || []
+        }));
+
+        return {
+            id: `repo-${idx}`,
+            name: repo,
+            color: REPO_COLORS[idx % REPO_COLORS.length],
+            tasks: structured,
+            _allTasks: repoTasks // flat list for stats
+        };
+    });
+}
+
+function getProjectCompletion(project) {
+    const all = project._allTasks || project.tasks;
+    if (!all.length) return 0;
+    const done = all.filter(t => t.status === 'done' || t.completed === true).length;
+    return done / all.length;
+}
+
+function getProjectWipCount(project) {
+    const all = project._allTasks || project.tasks;
+    return all.filter(t => t.status === 'in_progress').length;
+}
+
+
+// ============================================================
+// SAMPLE DATA (fallback)
+// ============================================================
 const SAMPLE_PROJECTS = [
     {
-        id: 'proj-1', name: 'Website Redesign', color: '#00d4ff', status: 'active',
+        id: 'proj-1', name: 'sphere', color: '#00d4ff',
         tasks: [
-            { id: 't1-1', title: 'Design homepage mockup', completed: true },
-            { id: 't1-2', title: 'Set up repository', completed: true },
-            { id: 't1-3', title: 'Build landing page', completed: false },
-            { id: 't1-4', title: 'Implement responsive nav', completed: false },
-            { id: 't1-5', title: 'Deploy to staging', completed: false }
+            { id: 's1', title: 'Supabase integration', status: 'done', task_type: 'feature', priority: 'high', subtasks: [] },
+            { id: 's2', title: 'Dynamic node rebuild', status: 'done', task_type: 'feature', priority: 'high', subtasks: [] },
+            { id: 's3', title: 'Task status cycling', status: 'in_progress', task_type: 'task', priority: 'medium', subtasks: [] },
+            { id: 's4', title: 'Refresh system', status: 'todo', task_type: 'task', priority: 'medium', subtasks: [] }
+        ],
+        _allTasks: [
+            { id: 's1', title: 'Supabase integration', status: 'done', task_type: 'feature', priority: 'high' },
+            { id: 's2', title: 'Dynamic node rebuild', status: 'done', task_type: 'feature', priority: 'high' },
+            { id: 's3', title: 'Task status cycling', status: 'in_progress', task_type: 'task', priority: 'medium' },
+            { id: 's4', title: 'Refresh system', status: 'todo', task_type: 'task', priority: 'medium' }
         ]
     },
     {
-        id: 'proj-2', name: 'Mobile App', color: '#00ffe1', status: 'active',
+        id: 'proj-2', name: 'fhe-studio', color: '#00ffe1',
         tasks: [
-            { id: 't2-1', title: 'Set up React Native project', completed: true },
-            { id: 't2-2', title: 'Design onboarding flow', completed: true },
-            { id: 't2-3', title: 'Build auth screens', completed: true },
-            { id: 't2-4', title: 'Implement push notifications', completed: false },
-            { id: 't2-5', title: 'App Store submission', completed: false }
+            { id: 'f1', title: 'Fix login redirect', status: 'done', task_type: 'bug', priority: 'critical', subtasks: [] },
+            { id: 'f2', title: 'Add dark mode', status: 'in_progress', task_type: 'feature', priority: 'medium', subtasks: [] },
+            { id: 'f3', title: 'Write API tests', status: 'todo', task_type: 'test', priority: 'high', subtasks: [] }
+        ],
+        _allTasks: [
+            { id: 'f1', title: 'Fix login redirect', status: 'done', task_type: 'bug', priority: 'critical' },
+            { id: 'f2', title: 'Add dark mode', status: 'in_progress', task_type: 'feature', priority: 'medium' },
+            { id: 'f3', title: 'Write API tests', status: 'todo', task_type: 'test', priority: 'high' }
         ]
     },
     {
-        id: 'proj-3', name: 'API Gateway', color: '#a78bfa', status: 'active',
+        id: 'proj-3', name: 'ally-api', color: '#a78bfa',
         tasks: [
-            { id: 't3-1', title: 'Define OpenAPI spec', completed: true },
-            { id: 't3-2', title: 'Set up rate limiting', completed: false },
-            { id: 't3-3', title: 'Implement auth middleware', completed: false },
-            { id: 't3-4', title: 'Add logging & monitoring', completed: false }
-        ]
-    },
-    {
-        id: 'proj-4', name: 'Design System', color: '#f472b6', status: 'active',
-        tasks: [
-            { id: 't4-1', title: 'Define color tokens', completed: true },
-            { id: 't4-2', title: 'Build button component', completed: true },
-            { id: 't4-3', title: 'Build input components', completed: true },
-            { id: 't4-4', title: 'Create icon library', completed: false },
-            { id: 't4-5', title: 'Write documentation', completed: false },
-            { id: 't4-6', title: 'Publish to npm', completed: false }
-        ]
-    },
-    {
-        id: 'proj-5', name: 'Data Pipeline', color: '#fb923c', status: 'active',
-        tasks: [
-            { id: 't5-1', title: 'Set up Kafka cluster', completed: true },
-            { id: 't5-2', title: 'Build ETL jobs', completed: false },
-            { id: 't5-3', title: 'Configure data warehouse', completed: false },
-            { id: 't5-4', title: 'Create dashboards', completed: false }
-        ]
-    },
-    {
-        id: 'proj-6', name: 'CI/CD Pipeline', color: '#4ade80', status: 'completed',
-        tasks: [
-            { id: 't6-1', title: 'Set up GitHub Actions', completed: true },
-            { id: 't6-2', title: 'Configure Docker builds', completed: true },
-            { id: 't6-3', title: 'Add automated tests', completed: true },
-            { id: 't6-4', title: 'Deploy to production', completed: true }
-        ]
-    },
-    {
-        id: 'proj-7', name: 'User Analytics', color: '#facc15', status: 'active',
-        tasks: [
-            { id: 't7-1', title: 'Integrate tracking SDK', completed: true },
-            { id: 't7-2', title: 'Define event schema', completed: true },
-            { id: 't7-3', title: 'Build funnel reports', completed: false },
-            { id: 't7-4', title: 'Set up A/B testing', completed: false },
-            { id: 't7-5', title: 'Create retention dashboard', completed: false }
-        ]
-    },
-    {
-        id: 'proj-8', name: 'Security Audit', color: '#f87171', status: 'active',
-        tasks: [
-            { id: 't8-1', title: 'Run dependency scan', completed: true },
-            { id: 't8-2', title: 'Pen test API endpoints', completed: false },
-            { id: 't8-3', title: 'Review auth flows', completed: false },
-            { id: 't8-4', title: 'Fix critical issues', completed: false }
-        ]
-    },
-    {
-        id: 'proj-9', name: 'Performance Opt', color: '#38bdf8', status: 'active',
-        tasks: [
-            { id: 't9-1', title: 'Profile slow queries', completed: true },
-            { id: 't9-2', title: 'Add Redis caching', completed: true },
-            { id: 't9-3', title: 'Optimize bundle size', completed: false },
-            { id: 't9-4', title: 'Implement lazy loading', completed: false }
-        ]
-    },
-    {
-        id: 'proj-10', name: 'Documentation', color: '#c084fc', status: 'active',
-        tasks: [
-            { id: 't10-1', title: 'Write API reference', completed: true },
-            { id: 't10-2', title: 'Create getting started guide', completed: true },
-            { id: 't10-3', title: 'Add code examples', completed: true },
-            { id: 't10-4', title: 'Build docs site', completed: false }
+            { id: 'a1', title: 'Define OpenAPI spec', status: 'done', task_type: 'task', priority: 'high', subtasks: [] },
+            { id: 'a2', title: 'Rate limiting middleware', status: 'done', task_type: 'feature', priority: 'high', subtasks: [] },
+            { id: 'a3', title: 'Auth middleware', status: 'in_progress', task_type: 'feature', priority: 'high', subtasks: [] },
+            { id: 'a4', title: 'Add monitoring', status: 'todo', task_type: 'task', priority: 'medium', subtasks: [] },
+            { id: 'a5', title: 'MIT license check', status: 'deferred', task_type: 'mit', priority: 'low', subtasks: [] }
+        ],
+        _allTasks: [
+            { id: 'a1', title: 'Define OpenAPI spec', status: 'done', task_type: 'task', priority: 'high' },
+            { id: 'a2', title: 'Rate limiting middleware', status: 'done', task_type: 'feature', priority: 'high' },
+            { id: 'a3', title: 'Auth middleware', status: 'in_progress', task_type: 'feature', priority: 'high' },
+            { id: 'a4', title: 'Add monitoring', status: 'todo', task_type: 'task', priority: 'medium' },
+            { id: 'a5', title: 'MIT license check', status: 'deferred', task_type: 'mit', priority: 'low' }
         ]
     }
 ];
 
-function loadProjects() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        try { return JSON.parse(stored); } catch (e) { /* fall through */ }
+
+// ============================================================
+// DATA LOADING
+// ============================================================
+let projects = [];
+let dataSource = 'SAMPLE';
+
+async function loadData() {
+    if (!isLive) {
+        projects = SAMPLE_PROJECTS;
+        dataSource = 'SAMPLE';
+        return;
     }
-    saveProjects(SAMPLE_PROJECTS);
-    return SAMPLE_PROJECTS;
-}
 
-function saveProjects(projects) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-}
+    try {
+        const session = await fetchTodaySession();
+        if (!session) {
+            console.warn('No session for today — using sample data');
+            projects = SAMPLE_PROJECTS;
+            dataSource = 'SAMPLE';
+            return;
+        }
 
-function getProjectCompletion(project) {
-    if (!project.tasks.length) return 0;
-    const done = project.tasks.filter(t => t.completed).length;
-    return done / project.tasks.length;
-}
+        const tasks = await fetchSessionTasks(session.id);
+        console.log('[sphere] Raw tasks from Supabase:', tasks);
+        console.log('[sphere] Task repos:', tasks.map(t => ({ id: t.id, title: t.title, repo: t.repo })));
+        if (!tasks.length) {
+            console.warn('No tasks for today — using sample data');
+            projects = SAMPLE_PROJECTS;
+            dataSource = 'SAMPLE';
+            return;
+        }
 
-let projects = loadProjects();
+        projects = groupTasksByRepo(tasks);
+        console.log('[sphere] Grouped projects:', projects.map(p => ({ name: p.name, taskCount: p.tasks.length })));
+        dataSource = 'LIVE';
+    } catch (e) {
+        console.error('Supabase fetch failed:', e);
+        projects = SAMPLE_PROJECTS;
+        dataSource = 'SAMPLE';
+    }
+}
 
 
 // ============================================================
@@ -682,20 +761,38 @@ mainGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.3, 32, 32), haloMat));
 
 
 // ============================================================
-// PROJECT NODES — golden angle distribution on sphere
+// PROJECT NODES — dynamic, rebuildable
 // ============================================================
-const nodeCount = projects.length;
-const nodePos = new Float32Array(nodeCount * 3);
-const nodeSizes = new Float32Array(nodeCount);
-const nodePhases = new Float32Array(nodeCount);
-const nodeColors = new Float32Array(nodeCount * 3);
+let nodeCount = 0;
+let nodePos, nodeSizes, nodePhases, nodeColors, nodeHovers;
+let nodeGeo = null;
+let nodeMat = null;
+let nodes = null;
+let nodeLabels = [];
 
-function placeProjectNodes() {
+function buildNodes() {
+    // Dispose old
+    if (nodes) {
+        mainGroup.remove(nodes);
+        nodeGeo.dispose();
+    }
+    nodeLabels.forEach(l => l.remove());
+    nodeLabels = [];
+
+    nodeCount = projects.length;
+    if (nodeCount === 0) return;
+
+    nodePos = new Float32Array(nodeCount * 3);
+    nodeSizes = new Float32Array(nodeCount);
+    nodePhases = new Float32Array(nodeCount);
+    nodeColors = new Float32Array(nodeCount * 3);
+    nodeHovers = new Float32Array(nodeCount);
+
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
 
     for (let i = 0; i < nodeCount; i++) {
-        // Golden angle distribution for even spacing
-        const y = 1 - (i / (nodeCount - 1)) * 2; // -1 to 1
+        // Golden angle distribution (handle single-node edge case)
+        const y = nodeCount === 1 ? 0 : 1 - (i / (nodeCount - 1)) * 2;
         const radiusAtY = Math.sqrt(1 - y * y);
         const theta = goldenAngle * i;
 
@@ -703,155 +800,93 @@ function placeProjectNodes() {
         nodePos[i * 3 + 1] = y;
         nodePos[i * 3 + 2] = radiusAtY * Math.sin(theta);
 
-        // Size encodes completion (0.4 base + 0.6 * completion)
         const completion = getProjectCompletion(projects[i]);
         nodeSizes[i] = 0.4 + completion * 0.6;
         nodePhases[i] = Math.random() * Math.PI * 2;
 
-        // Per-node color
         const col = new THREE.Color(projects[i].color);
         nodeColors[i * 3]     = col.r;
         nodeColors[i * 3 + 1] = col.g;
         nodeColors[i * 3 + 2] = col.b;
     }
-}
 
-placeProjectNodes();
+    nodeGeo = new THREE.BufferGeometry();
+    nodeGeo.setAttribute('position', new THREE.BufferAttribute(nodePos, 3));
+    nodeGeo.setAttribute('aSize', new THREE.BufferAttribute(nodeSizes, 1));
+    nodeGeo.setAttribute('aPhase', new THREE.BufferAttribute(nodePhases, 1));
+    nodeGeo.setAttribute('aColor', new THREE.BufferAttribute(nodeColors, 3));
+    nodeGeo.setAttribute('aHovered', new THREE.BufferAttribute(nodeHovers, 1));
 
-const nodeGeo = new THREE.BufferGeometry();
-nodeGeo.setAttribute('position', new THREE.BufferAttribute(nodePos, 3));
-nodeGeo.setAttribute('aSize', new THREE.BufferAttribute(nodeSizes, 1));
-nodeGeo.setAttribute('aPhase', new THREE.BufferAttribute(nodePhases, 1));
-const nodeHovers = new Float32Array(nodeCount);
-nodeGeo.setAttribute('aColor', new THREE.BufferAttribute(nodeColors, 3));
-nodeGeo.setAttribute('aHovered', new THREE.BufferAttribute(nodeHovers, 1));
+    nodeMat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uSize: { value: params.nodeSize },
+            uPulse: { value: params.nodePulse }
+        },
+        vertexShader: `
+            uniform float uTime;
+            uniform float uSize;
+            uniform float uPulse;
+            attribute float aSize;
+            attribute float aPhase;
+            attribute vec3 aColor;
+            attribute float aHovered;
+            varying float vAlpha;
+            varying vec3 vColor;
+            varying float vHover;
 
-const nodeMat = new THREE.ShaderMaterial({
-    uniforms: {
-        uTime: { value: 0 },
-        uSize: { value: params.nodeSize },
-        uPulse: { value: params.nodePulse }
-    },
-    vertexShader: `
-        uniform float uTime;
-        uniform float uSize;
-        uniform float uPulse;
-        attribute float aSize;
-        attribute float aPhase;
-        attribute vec3 aColor;
-        attribute float aHovered;
-        varying float vAlpha;
-        varying vec3 vColor;
-        varying float vHover;
+            void main() {
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                float pulse = sin(uTime * 2.0 + aPhase) * 0.5 + 0.5;
+                float size = (6.0 * aSize + 3.0) * uSize;
+                size *= 1.0 + pulse * uPulse * 0.5;
+                size *= 1.0 + aHovered * 0.9;
+                gl_PointSize = size * (1.0 / -mvPosition.z);
+                vAlpha = 0.5 + 0.5 * pulse;
+                vColor = aColor;
+                vHover = aHovered;
+            }
+        `,
+        fragmentShader: `
+            varying float vAlpha;
+            varying vec3 vColor;
+            varying float vHover;
+            void main() {
+                vec2 uv = gl_PointCoord - vec2(0.5);
+                float dist = length(uv);
+                if (dist > 0.5) discard;
 
-        void main() {
-            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            gl_Position = projectionMatrix * mvPosition;
-            float pulse = sin(uTime * 2.0 + aPhase) * 0.5 + 0.5;
-            float size = (6.0 * aSize + 3.0) * uSize;
-            size *= 1.0 + pulse * uPulse * 0.5;
-            // Hover: smooth scale up
-            size *= 1.0 + aHovered * 0.9;
-            gl_PointSize = size * (1.0 / -mvPosition.z);
-            vAlpha = 0.5 + 0.5 * pulse;
-            vColor = aColor;
-            vHover = aHovered;
-        }
-    `,
-    fragmentShader: `
-        varying float vAlpha;
-        varying vec3 vColor;
-        varying float vHover;
-        void main() {
-            vec2 uv = gl_PointCoord - vec2(0.5);
-            float dist = length(uv);
-            if (dist > 0.5) discard;
+                float core = 1.0 - smoothstep(0.0, 0.10, dist);
+                float glow = exp(-dist * dist * 10.0);
+                float ring = smoothstep(0.26, 0.30, dist) * (1.0 - smoothstep(0.33, 0.40, dist));
+                float haze = exp(-dist * dist * 4.0) * 0.25;
 
-            // Bright core
-            float core = 1.0 - smoothstep(0.0, 0.10, dist);
-            // Soft glow falloff
-            float glow = exp(-dist * dist * 10.0);
-            // Orbital ring
-            float ring = smoothstep(0.26, 0.30, dist) * (1.0 - smoothstep(0.33, 0.40, dist));
-            // Outer haze
-            float haze = exp(-dist * dist * 4.0) * 0.25;
+                float hBoost = 1.0 + vHover * 0.7;
 
-            // Hover boost: brighter core + ring
-            float hBoost = 1.0 + vHover * 0.7;
+                vec3 color = vColor * (core * 2.5 + glow * 1.0 + ring * 1.8 + haze) * hBoost;
+                float alpha = (core + glow * 0.5 + ring * 0.8 + haze) * vAlpha * hBoost;
+                alpha = clamp(alpha, 0.0, 1.0);
+                gl_FragColor = vec4(color, alpha);
+            }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
 
-            vec3 color = vColor * (core * 2.5 + glow * 1.0 + ring * 1.8 + haze) * hBoost;
-            float alpha = (core + glow * 0.5 + ring * 0.8 + haze) * vAlpha * hBoost;
-            alpha = clamp(alpha, 0.0, 1.0);
-            gl_FragColor = vec4(color, alpha);
-        }
-    `,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-});
+    nodes = new THREE.Points(nodeGeo, nodeMat);
+    mainGroup.add(nodes);
 
-const nodes = new THREE.Points(nodeGeo, nodeMat);
-mainGroup.add(nodes);
-
-
-// ============================================================
-// FLOATING NODE LABELS
-// ============================================================
-const nodeLabels = [];
-for (let i = 0; i < nodeCount; i++) {
-    const label = document.createElement('div');
-    label.className = 'node-floating-label';
-    label.textContent = projects[i].name;
-    label.dataset.color = projects[i].color;
-    document.body.appendChild(label);
-    nodeLabels.push(label);
-}
-
-function updateNodeLabels() {
+    // Create floating labels
     for (let i = 0; i < nodeCount; i++) {
-        const worldPos = getNodeWorldPos(i);
-        const screenPos = worldPos.clone().project(camera);
-
-        // Hide if behind camera or during focus
-        const behind = screenPos.z > 1;
-        const hidden = behind || (focusedNodeIndex !== -1 && focusedNodeIndex !== i);
-
-        if (hidden) {
-            nodeLabels[i].style.opacity = '0';
-            continue;
-        }
-
-        const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
-        const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
-
-        nodeLabels[i].style.left = x + 'px';
-        nodeLabels[i].style.top = (y - 24) + 'px';
-
-        // Depth-based opacity: closer = brighter
-        const depthFade = THREE.MathUtils.smoothstep(screenPos.z, 0.98, 0.995);
-        const baseOpacity = 1.0 - depthFade * 0.7;
-        const isHovered = i === hoveredNodeIndex;
-        const opacity = isHovered ? 1.0 : baseOpacity * 0.6;
-
-        nodeLabels[i].style.opacity = String(opacity);
-        nodeLabels[i].classList.toggle('hovered', isHovered);
-
-        if (isHovered) {
-            nodeLabels[i].style.color = projects[i].color;
-        } else {
-            nodeLabels[i].style.color = '';
-        }
+        const label = document.createElement('div');
+        label.className = 'node-floating-label';
+        label.textContent = projects[i].name;
+        label.dataset.color = projects[i].color;
+        document.body.appendChild(label);
+        nodeLabels.push(label);
     }
-}
-
-function updateNodeHovers(dt) {
-    const lerpSpeed = 12.0;
-    const factor = Math.min(1, lerpSpeed * dt);
-    for (let i = 0; i < nodeCount; i++) {
-        const target = i === hoveredNodeIndex ? 1.0 : 0.0;
-        nodeHovers[i] += (target - nodeHovers[i]) * factor;
-    }
-    nodeGeo.attributes.aHovered.needsUpdate = true;
 }
 
 
@@ -882,8 +917,8 @@ folderAnim.add(params, 'rotationSpeedX', -0.01, 0.01).name('Rotation X');
 folderAnim.add(params, 'rotationSpeedY', -0.01, 0.01).name('Rotation Y');
 
 const folderNodes = gui.addFolder('Nodes');
-folderNodes.add(params, 'nodeSize', 0.1, 5.0).name('Size').onChange(v => nodeMat.uniforms.uSize.value = v);
-folderNodes.add(params, 'nodePulse', 0.0, 2.0).name('Pulse').onChange(v => nodeMat.uniforms.uPulse.value = v);
+folderNodes.add(params, 'nodeSize', 0.1, 5.0).name('Size').onChange(v => { if (nodeMat) nodeMat.uniforms.uSize.value = v; });
+folderNodes.add(params, 'nodePulse', 0.0, 2.0).name('Pulse').onChange(v => { if (nodeMat) nodeMat.uniforms.uPulse.value = v; });
 
 const folderBloom = gui.addFolder('Bloom');
 folderBloom.add(params, 'bloomStrength', 0.0, 3.0).name('Strength').onChange(v => bloomPass.strength = v);
@@ -960,14 +995,31 @@ mainGroup.add(focusRing2);
 // ============================================================
 const panelEl = document.getElementById('project-panel');
 const panelName = document.getElementById('panel-name');
-const panelStatus = document.getElementById('panel-status');
 const panelPct = document.getElementById('panel-pct');
 const panelBarFill = document.getElementById('panel-bar-fill');
 const panelTasks = document.getElementById('panel-tasks');
-const panelAddBtn = document.getElementById('panel-add-btn');
-const panelAddInput = document.getElementById('panel-add-input');
-const panelNewTask = document.getElementById('panel-new-task');
 const panelDot = panelEl.querySelector('.project-panel-dot');
+const panelFooter = panelEl.querySelector('.project-panel-footer');
+
+const STATUS_CYCLE = ['todo', 'in_progress', 'done'];
+const STATUS_ICONS = {
+    todo: '',
+    in_progress: '...',
+    done: '\u2713',
+    deferred: '\u2192'
+};
+const TYPE_LABELS = {
+    bug: { text: 'BUG', cls: 'type-bug' },
+    feature: { text: 'FEAT', cls: 'type-feat' },
+    mit: { text: 'MIT', cls: 'type-mit' },
+    test: { text: 'TEST', cls: 'type-test' }
+};
+const PRIORITY_COLORS = {
+    critical: '#f87171',
+    high: '#fb923c',
+    medium: '#facc15',
+    low: '#4ade80'
+};
 
 function openPanel(projectIndex) {
     const project = projects[projectIndex];
@@ -976,15 +1028,12 @@ function openPanel(projectIndex) {
     panelName.textContent = project.name;
     panelDot.style.color = project.color;
     panelName.style.color = project.color;
-    panelStatus.textContent = project.status.toUpperCase();
 
     renderPanelTasks(projectIndex);
     updatePanelProgress(projectIndex);
 
-    // Reset add-task UI
-    panelAddBtn.style.display = '';
-    panelAddInput.style.display = 'none';
-    panelNewTask.value = '';
+    // Update footer data source
+    panelFooter.innerHTML = `<span class="data-source-${dataSource.toLowerCase()}">${dataSource}</span> &middot; ESC to close`;
 
     panelEl.classList.add('open');
 }
@@ -997,32 +1046,100 @@ function renderPanelTasks(projectIndex) {
     const project = projects[projectIndex];
     panelTasks.innerHTML = '';
 
-    project.tasks.forEach((task, taskIdx) => {
-        const item = document.createElement('div');
-        item.className = 'task-item' + (task.completed ? ' completed' : '');
+    project.tasks.forEach((task) => {
+        renderSingleTask(task, projectIndex, false);
+        // Render subtasks
+        if (task.subtasks && task.subtasks.length) {
+            task.subtasks.forEach(sub => {
+                renderSingleTask(sub, projectIndex, true);
+            });
+        }
+    });
+}
 
-        const checkbox = document.createElement('div');
-        checkbox.className = 'task-checkbox';
-        checkbox.textContent = task.completed ? '\u2713' : '';
+function renderSingleTask(task, projectIndex, isSubtask) {
+    const item = document.createElement('div');
+    const status = task.status || (task.completed ? 'done' : 'todo');
+    item.className = 'task-item task-status-' + status;
+    if (isSubtask) item.classList.add('task-subtask');
 
-        const title = document.createElement('span');
-        title.className = 'task-title';
-        title.textContent = task.title;
+    // Priority dot
+    if (task.priority && PRIORITY_COLORS[task.priority]) {
+        const dot = document.createElement('span');
+        dot.className = 'task-priority-dot';
+        dot.style.background = PRIORITY_COLORS[task.priority];
+        dot.title = task.priority;
+        item.appendChild(dot);
+    }
 
-        item.appendChild(checkbox);
-        item.appendChild(title);
+    // Status checkbox
+    const checkbox = document.createElement('div');
+    checkbox.className = 'task-checkbox task-cb-' + status;
+    checkbox.textContent = STATUS_ICONS[status] || '';
+    item.appendChild(checkbox);
 
-        item.addEventListener('click', () => {
-            task.completed = !task.completed;
-            saveProjects(projects);
+    // Title
+    const title = document.createElement('span');
+    title.className = 'task-title';
+    title.textContent = task.title;
+    item.appendChild(title);
+
+    // Type badge
+    if (task.task_type && TYPE_LABELS[task.task_type]) {
+        const badge = document.createElement('span');
+        badge.className = 'task-type-badge ' + TYPE_LABELS[task.task_type].cls;
+        badge.textContent = TYPE_LABELS[task.task_type].text;
+        item.appendChild(badge);
+    }
+
+    // Click to cycle status (deferred tasks are frozen)
+    if (status !== 'deferred') {
+        item.addEventListener('click', () => cycleTaskStatus(task, projectIndex));
+    }
+
+    panelTasks.appendChild(item);
+}
+
+async function cycleTaskStatus(task, projectIndex) {
+    const currentIdx = STATUS_CYCLE.indexOf(task.status || 'todo');
+    const newStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length];
+
+    // Optimistic update
+    const oldStatus = task.status;
+    task.status = newStatus;
+
+    // Also update in _allTasks if it exists
+    const project = projects[projectIndex];
+    if (project._allTasks) {
+        const allTask = project._allTasks.find(t => t.id === task.id);
+        if (allTask) allTask.status = newStatus;
+    }
+
+    renderPanelTasks(projectIndex);
+    updatePanelProgress(projectIndex);
+    updateNodeSize(projectIndex);
+    updateHudStats();
+    updateRepoNavStats();
+
+    // PATCH Supabase
+    if (isLive) {
+        try {
+            await patchTaskStatus(task.id, newStatus);
+        } catch (e) {
+            console.error('Failed to patch task:', e);
+            // Revert
+            task.status = oldStatus;
+            if (project._allTasks) {
+                const allTask = project._allTasks.find(t => t.id === task.id);
+                if (allTask) allTask.status = oldStatus;
+            }
             renderPanelTasks(projectIndex);
             updatePanelProgress(projectIndex);
             updateNodeSize(projectIndex);
             updateHudStats();
-        });
-
-        panelTasks.appendChild(item);
-    });
+            updateRepoNavStats();
+        }
+    }
 }
 
 function updatePanelProgress(projectIndex) {
@@ -1033,65 +1150,94 @@ function updatePanelProgress(projectIndex) {
 }
 
 function updateNodeSize(projectIndex) {
+    if (!nodeGeo || projectIndex >= nodeCount) return;
     const completion = getProjectCompletion(projects[projectIndex]);
     nodeSizes[projectIndex] = 0.4 + completion * 0.6;
     nodeGeo.attributes.aSize.needsUpdate = true;
 }
 
-// Add task button
-panelAddBtn.addEventListener('click', () => {
-    panelAddBtn.style.display = 'none';
-    panelAddInput.style.display = '';
-    panelNewTask.focus();
-});
 
-panelNewTask.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && panelNewTask.value.trim()) {
-        const project = projects[focusedNodeIndex];
-        if (!project) return;
+// ============================================================
+// FLOATING NODE LABELS
+// ============================================================
+function updateNodeLabels() {
+    for (let i = 0; i < nodeCount; i++) {
+        if (!nodeLabels[i]) continue;
+        const worldPos = getNodeWorldPos(i);
+        const screenPos = worldPos.clone().project(camera);
 
-        const newTask = {
-            id: 't' + Date.now(),
-            title: panelNewTask.value.trim(),
-            completed: false
-        };
+        const behind = screenPos.z > 1;
+        const hidden = behind || (focusedNodeIndex !== -1 && focusedNodeIndex !== i);
 
-        project.tasks.push(newTask);
-        saveProjects(projects);
-        renderPanelTasks(focusedNodeIndex);
-        updatePanelProgress(focusedNodeIndex);
-        updateNodeSize(focusedNodeIndex);
-        updateHudStats();
+        if (hidden) {
+            nodeLabels[i].style.opacity = '0';
+            continue;
+        }
 
-        panelNewTask.value = '';
-        panelNewTask.focus();
-    } else if (e.key === 'Escape') {
-        panelAddBtn.style.display = '';
-        panelAddInput.style.display = 'none';
-        panelNewTask.value = '';
+        const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+
+        nodeLabels[i].style.left = x + 'px';
+        nodeLabels[i].style.top = (y - 24) + 'px';
+
+        const depthFade = THREE.MathUtils.smoothstep(screenPos.z, 0.98, 0.995);
+        const baseOpacity = 1.0 - depthFade * 0.7;
+        const isHovered = i === hoveredNodeIndex;
+        const opacity = isHovered ? 1.0 : baseOpacity * 0.6;
+
+        nodeLabels[i].style.opacity = String(opacity);
+        nodeLabels[i].classList.toggle('hovered', isHovered);
+
+        if (isHovered) {
+            nodeLabels[i].style.color = projects[i].color;
+        } else {
+            nodeLabels[i].style.color = '';
+        }
     }
-});
+}
+
+function updateNodeHovers(dt) {
+    if (!nodeGeo || !nodeHovers) return;
+    const lerpSpeed = 12.0;
+    const factor = Math.min(1, lerpSpeed * dt);
+    for (let i = 0; i < nodeCount; i++) {
+        const target = i === hoveredNodeIndex ? 1.0 : 0.0;
+        nodeHovers[i] += (target - nodeHovers[i]) * factor;
+    }
+    nodeGeo.attributes.aHovered.needsUpdate = true;
+}
 
 
 // ============================================================
 // HUD DOM refs
 // ============================================================
 const hudFpsEl = document.getElementById('hud-fps');
-const hudProjectsEl = document.getElementById('hud-projects');
-const hudActiveEl = document.getElementById('hud-active');
+const hudReposEl = document.getElementById('hud-repos');
+const hudWipEl = document.getElementById('hud-wip');
 const hudCompletionEl = document.getElementById('hud-completion');
+const dataSourceEl = document.getElementById('data-source');
 
 function updateHudStats() {
-    hudProjectsEl.textContent = projects.length;
-    hudActiveEl.textContent = projects.filter(p => p.status === 'active').length;
+    if (hudReposEl) hudReposEl.textContent = projects.length;
+    if (hudWipEl) {
+        const wipCount = projects.reduce((sum, p) => sum + getProjectWipCount(p), 0);
+        hudWipEl.textContent = wipCount;
+    }
 
-    const totalTasks = projects.reduce((sum, p) => sum + p.tasks.length, 0);
-    const doneTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => t.completed).length, 0);
+    const totalTasks = projects.reduce((sum, p) => (p._allTasks || p.tasks).length, 0);
+    const doneTasks = projects.reduce((sum, p) => {
+        const all = p._allTasks || p.tasks;
+        return sum + all.filter(t => t.status === 'done' || t.completed === true).length;
+    }, 0);
     const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
-    hudCompletionEl.textContent = pct + '%';
-}
+    if (hudCompletionEl) hudCompletionEl.textContent = pct + '%';
 
-updateHudStats();
+    // Data source indicator
+    if (dataSourceEl) {
+        dataSourceEl.textContent = dataSource;
+        dataSourceEl.className = 'data-source-indicator data-source-' + dataSource.toLowerCase();
+    }
+}
 
 
 // ============================================================
@@ -1102,6 +1248,7 @@ function easeInOutCubic(t) {
 }
 
 function getNodeWorldPos(index) {
+    if (!nodeGeo) return new THREE.Vector3();
     const pos = nodeGeo.attributes.position;
     const local = new THREE.Vector3(pos.getX(index), pos.getY(index), pos.getZ(index));
     return local.applyMatrix4(nodes.matrixWorld);
@@ -1127,11 +1274,9 @@ function focusNode(index) {
     focusTo.target.copy(worldPos);
     focusTo.pos.copy(worldPos).add(normal.multiplyScalar(0.6));
 
-    // Show rings
     focusRing.visible = true;
     focusRing2.visible = true;
 
-    // Set ring color to project color
     const projColor = new THREE.Color(projects[index].color);
     ringMat.uniforms.uColor.value.copy(projColor);
     ringMat.uniforms.uOpacity.value = 1.0;
@@ -1144,11 +1289,9 @@ function focusNode(index) {
     gridMat.uniforms.uPulseOrigin.value.set(px, py, pz).normalize();
     pulseStartTime = clock.getElapsedTime();
 
-    // Hide hover tooltip
     hoverTooltip.style.display = 'none';
-
-    // Open project panel
     openPanel(index);
+    updateRepoNavActive(index);
 }
 
 function unfocusNode() {
@@ -1169,6 +1312,7 @@ function unfocusNode() {
     ringMat2.uniforms.uOpacity.value = 0.0;
 
     closePanel();
+    updateRepoNavActive(-1);
 }
 
 function updateFocusAnimation(dt) {
@@ -1203,6 +1347,7 @@ function updateFocusRing(t) {
 // Click handler
 renderer.domElement.addEventListener('click', (e) => {
     if (e.target !== renderer.domElement) return;
+    if (!nodes) return;
 
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -1225,9 +1370,13 @@ window.addEventListener('keydown', (e) => {
 // Close panel when clicking outside
 document.addEventListener('click', (e) => {
     if (focusedNodeIndex === -1) return;
-    // Don't close if clicking the canvas (handled above) or the panel itself
     if (e.target === renderer.domElement) return;
     if (panelEl.contains(e.target)) return;
+    // Don't close if clicking refresh button or repo nav
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn && refreshBtn.contains(e.target)) return;
+    const repoNav = document.getElementById('repo-nav');
+    if (repoNav && repoNav.contains(e.target)) return;
     unfocusNode();
 });
 
@@ -1240,6 +1389,8 @@ const hoverIdEl = hoverTooltip.querySelector('.hover-tooltip-id');
 const hoverSigEl = hoverTooltip.querySelector('.hover-tooltip-sig');
 
 renderer.domElement.addEventListener('mousemove', (e) => {
+    if (!nodes) return;
+
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
@@ -1250,14 +1401,19 @@ renderer.domElement.addEventListener('mousemove', (e) => {
         const idx = hits[0].index;
         hoveredNodeIndex = idx;
         const project = projects[idx];
-        const done = project.tasks.filter(t => t.completed).length;
-        const total = project.tasks.length;
+        const all = project._allTasks || project.tasks;
+        const done = all.filter(t => t.status === 'done' || t.completed === true).length;
+        const wip = all.filter(t => t.status === 'in_progress').length;
+        const total = all.length;
 
         hoverTooltip.style.display = 'block';
         hoverTooltip.style.left = (e.clientX + 15) + 'px';
         hoverTooltip.style.top = (e.clientY - 10) + 'px';
         hoverIdEl.textContent = project.name;
-        hoverSigEl.textContent = `${done}/${total} tasks`;
+
+        let sig = `${done}/${total} done`;
+        if (wip > 0) sig += ` (${wip} wip)`;
+        hoverSigEl.textContent = sig;
         renderer.domElement.style.cursor = 'pointer';
     } else {
         hoveredNodeIndex = -1;
@@ -1287,6 +1443,175 @@ window.addEventListener('keydown', (e) => {
         toggleGui();
     }
 });
+
+
+// ============================================================
+// REPO NAVIGATION PANEL
+// ============================================================
+const repoNavList = document.getElementById('repo-nav-list');
+const repoNavToggle = document.getElementById('repo-nav-toggle');
+let repoNavCollapsed = false;
+
+function buildRepoNav() {
+    repoNavList.innerHTML = '';
+
+    projects.forEach((project, idx) => {
+        const item = document.createElement('div');
+        item.className = 'repo-nav-item';
+        item.dataset.index = idx;
+
+        const all = project._allTasks || project.tasks;
+        const done = all.filter(t => t.status === 'done' || t.completed === true).length;
+        const total = all.length;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        const wip = all.filter(t => t.status === 'in_progress').length;
+
+        let metaText = `${done}/${total} done`;
+        if (wip > 0) metaText += ` · ${wip} wip`;
+
+        item.innerHTML = `
+            <span class="repo-nav-dot" style="color: ${project.color}; background: ${project.color};"></span>
+            <div class="repo-nav-info">
+                <span class="repo-nav-name">${project.name}</span>
+                <span class="repo-nav-meta">${metaText}</span>
+            </div>
+            <div class="repo-nav-bar">
+                <div class="repo-nav-bar-fill" style="width: ${pct}%; background: linear-gradient(90deg, ${project.color}99, ${project.color});"></div>
+            </div>
+        `;
+
+        item.addEventListener('click', () => {
+            focusNode(idx);
+            updateRepoNavActive(idx);
+        });
+
+        repoNavList.appendChild(item);
+    });
+
+    updateRepoNavActive(focusedNodeIndex);
+}
+
+function updateRepoNavActive(activeIndex) {
+    const items = repoNavList.querySelectorAll('.repo-nav-item');
+    items.forEach((item, idx) => {
+        item.classList.toggle('active', idx === activeIndex);
+    });
+}
+
+function updateRepoNavStats() {
+    const items = repoNavList.querySelectorAll('.repo-nav-item');
+    projects.forEach((project, idx) => {
+        if (!items[idx]) return;
+        const all = project._allTasks || project.tasks;
+        const done = all.filter(t => t.status === 'done' || t.completed === true).length;
+        const total = all.length;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        const wip = all.filter(t => t.status === 'in_progress').length;
+
+        let metaText = `${done}/${total} done`;
+        if (wip > 0) metaText += ` · ${wip} wip`;
+
+        const meta = items[idx].querySelector('.repo-nav-meta');
+        const barFill = items[idx].querySelector('.repo-nav-bar-fill');
+        if (meta) meta.textContent = metaText;
+        if (barFill) barFill.style.width = pct + '%';
+    });
+}
+
+// Toggle collapse
+if (repoNavToggle) {
+    repoNavToggle.addEventListener('click', () => {
+        repoNavCollapsed = !repoNavCollapsed;
+        repoNavList.classList.toggle('collapsed', repoNavCollapsed);
+    });
+}
+
+// Tab key shortcut
+window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        repoNavCollapsed = !repoNavCollapsed;
+        repoNavList.classList.toggle('collapsed', repoNavCollapsed);
+    }
+
+    // Arrow keys to cycle repos (only when nav is open)
+    if (repoNavCollapsed || projects.length === 0) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        let nextIdx;
+        if (focusedNodeIndex === -1) {
+            nextIdx = e.key === 'ArrowDown' ? 0 : projects.length - 1;
+        } else {
+            const delta = e.key === 'ArrowDown' ? 1 : -1;
+            nextIdx = (focusedNodeIndex + delta + projects.length) % projects.length;
+        }
+        focusNode(nextIdx);
+        updateRepoNavActive(nextIdx);
+    }
+});
+
+
+// ============================================================
+// REFRESH SYSTEM
+// ============================================================
+let refreshIntervalId = null;
+const REFRESH_INTERVAL = 60_000; // 60 seconds
+
+async function refreshData() {
+    const refreshBtn = document.getElementById('refresh-btn');
+    const refreshIcon = refreshBtn?.querySelector('.refresh-icon');
+    if (refreshIcon) refreshIcon.classList.add('spinning');
+
+    // Remember focused repo name
+    const focusedRepoName = focusedNodeIndex >= 0 ? projects[focusedNodeIndex]?.name : null;
+
+    await loadData();
+    buildNodes();
+    buildRepoNav();
+    updateHudStats();
+
+    // Re-find focused repo by name
+    if (focusedRepoName) {
+        const newIdx = projects.findIndex(p => p.name === focusedRepoName);
+        if (newIdx >= 0) {
+            focusedNodeIndex = newIdx;
+            openPanel(newIdx);
+            updateRepoNavActive(newIdx);
+        } else {
+            focusedNodeIndex = -1;
+            closePanel();
+            updateRepoNavActive(-1);
+        }
+    }
+
+    if (refreshIcon) {
+        setTimeout(() => refreshIcon.classList.remove('spinning'), 600);
+    }
+}
+
+function startAutoRefresh() {
+    if (!isLive) return;
+    refreshIntervalId = setInterval(refreshData, REFRESH_INTERVAL);
+}
+
+// R key shortcut + button
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'r' || e.key === 'R') {
+        if (e.target.tagName === 'INPUT') return;
+        refreshData();
+    }
+});
+
+// Bind refresh button after DOM is ready
+const refreshBtn = document.getElementById('refresh-btn');
+if (refreshBtn) {
+    refreshBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        refreshData();
+    });
+}
 
 
 // ============================================================
@@ -1339,7 +1664,7 @@ function animate() {
     nebulaMat.uniforms.uTime.value = t;
     starMat.uniforms.uTime.value = t;
     gridMat.uniforms.uTime.value = t * params.timeScale;
-    nodeMat.uniforms.uTime.value = t * params.timeScale;
+    if (nodeMat) nodeMat.uniforms.uTime.value = t * params.timeScale;
     haloMat.uniforms.uTime.value = t;
 
     // Pulse wave
@@ -1399,4 +1724,22 @@ window.addEventListener('resize', () => {
     nebulaMat.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
 });
 
-animate();
+
+// ============================================================
+// ASYNC INIT
+// ============================================================
+async function init() {
+    // Show loading state
+    if (hudReposEl) hudReposEl.textContent = '...';
+    if (hudWipEl) hudWipEl.textContent = '...';
+    if (hudCompletionEl) hudCompletionEl.textContent = '...';
+
+    await loadData();
+    buildNodes();
+    buildRepoNav();
+    updateHudStats();
+    startAutoRefresh();
+    animate();
+}
+
+init();

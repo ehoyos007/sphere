@@ -37,6 +37,47 @@ canvas { display: block; }
 }
 
 
+/* === REFRESH BUTTON === */
+.refresh-btn {
+    position: fixed;
+    bottom: 16px;
+    right: 64px;
+    z-index: 1000;
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 8px;
+    background: rgba(2, 4, 8, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: rgba(0, 212, 255, 0.8);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+.refresh-btn:hover {
+    border-color: rgba(0, 212, 255, 0.6);
+    background: rgba(0, 212, 255, 0.08);
+    color: #00d4ff;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+
+.refresh-icon {
+    display: inline-block;
+    transition: transform 0.6s ease;
+}
+.refresh-icon.spinning {
+    animation: refreshSpin 0.6s ease;
+}
+@keyframes refreshSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+
 /* === GUI PANEL === */
 .lil-gui.root {
     position: fixed !important;
@@ -199,7 +240,7 @@ canvas { display: block; }
 .hud-bottom-right-info {
     position: absolute;
     bottom: 24px;
-    right: 70px;
+    right: 120px;
     animation: hudFadeIn 1s ease 1s both;
 }
 .hud-fps {
@@ -251,6 +292,21 @@ canvas { display: block; }
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+
+/* === DATA SOURCE INDICATOR === */
+.data-source-indicator {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    transition: color 0.3s ease;
+}
+.data-source-live {
+    color: rgba(74, 222, 128, 0.9);
+}
+.data-source-sample {
+    color: rgba(251, 146, 60, 0.7);
 }
 
 
@@ -398,111 +454,8 @@ canvas { display: block; }
 .project-panel-tasks {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     margin-bottom: 12px;
-}
-
-.task-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background 0.2s ease;
-    font-size: 11px;
-    color: rgba(200, 220, 240, 0.8);
-}
-
-.task-item:hover {
-    background: rgba(0, 212, 255, 0.06);
-}
-
-.task-item.completed {
-    color: rgba(200, 220, 240, 0.35);
-    text-decoration: line-through;
-}
-
-.task-checkbox {
-    width: 14px;
-    height: 14px;
-    border: 1px solid rgba(0, 212, 255, 0.3);
-    border-radius: 3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: all 0.2s ease;
-    font-size: 9px;
-    color: transparent;
-}
-
-.task-item.completed .task-checkbox {
-    border-color: rgba(0, 255, 225, 0.4);
-    background: rgba(0, 255, 225, 0.1);
-    color: rgba(0, 255, 225, 0.8);
-}
-
-.task-item:hover .task-checkbox {
-    border-color: rgba(0, 212, 255, 0.5);
-}
-
-.task-title {
-    flex: 1;
-    line-height: 1.3;
-}
-
-/* Add task area */
-.project-panel-add {
-    margin-bottom: 12px;
-}
-
-.project-panel-add-btn {
-    background: none;
-    border: 1px dashed rgba(0, 212, 255, 0.2);
-    border-radius: 4px;
-    color: rgba(0, 212, 255, 0.5);
-    font-family: inherit;
-    font-size: 10px;
-    letter-spacing: 0.5px;
-    padding: 6px 10px;
-    cursor: pointer;
-    width: 100%;
-    text-align: left;
-    transition: all 0.2s ease;
-}
-
-.project-panel-add-btn:hover {
-    border-color: rgba(0, 212, 255, 0.4);
-    color: rgba(0, 212, 255, 0.8);
-    background: rgba(0, 212, 255, 0.04);
-}
-
-.project-panel-add-input {
-    margin-top: 6px;
-}
-
-.project-panel-add-input input {
-    width: 100%;
-    background: rgba(0, 212, 255, 0.05);
-    border: 1px solid rgba(0, 212, 255, 0.2);
-    border-radius: 4px;
-    color: rgba(200, 220, 240, 0.9);
-    font-family: inherit;
-    font-size: 11px;
-    padding: 6px 10px;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.2s ease;
-}
-
-.project-panel-add-input input:focus {
-    border-color: rgba(0, 212, 255, 0.5);
-    box-shadow: 0 0 8px rgba(0, 212, 255, 0.1);
-}
-
-.project-panel-add-input input::placeholder {
-    color: rgba(200, 220, 240, 0.25);
 }
 
 .project-panel-footer {
@@ -520,4 +473,320 @@ canvas { display: block; }
 .project-panel::-webkit-scrollbar-thumb {
     background: rgba(0, 212, 255, 0.2);
     border-radius: 2px;
+}
+
+
+/* === TASK ITEMS === */
+.task-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    font-size: 11px;
+    color: rgba(200, 220, 240, 0.8);
+}
+
+.task-item:hover {
+    background: rgba(0, 212, 255, 0.06);
+}
+
+/* Subtask indentation */
+.task-subtask {
+    margin-left: 16px;
+    padding-left: 12px;
+    border-left: 1px solid rgba(0, 212, 255, 0.12);
+    font-size: 10px;
+}
+
+/* Priority dot */
+.task-priority-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Task checkbox — status variants */
+.task-checkbox {
+    width: 14px;
+    height: 14px;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    font-size: 9px;
+    color: transparent;
+}
+
+.task-item:hover .task-checkbox {
+    border-color: rgba(0, 212, 255, 0.5);
+}
+
+/* todo — empty */
+.task-cb-todo {
+    color: transparent;
+}
+
+/* in_progress — animated dots */
+.task-cb-in_progress {
+    border-color: rgba(251, 191, 36, 0.5);
+    background: rgba(251, 191, 36, 0.08);
+    color: rgba(251, 191, 36, 0.9);
+    font-size: 8px;
+    animation: wipPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes wipPulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+/* done — checkmark */
+.task-cb-done {
+    border-color: rgba(0, 255, 225, 0.4);
+    background: rgba(0, 255, 225, 0.1);
+    color: rgba(0, 255, 225, 0.8);
+}
+
+/* deferred — arrow, frozen */
+.task-cb-deferred {
+    border-color: rgba(200, 220, 240, 0.15);
+    background: rgba(200, 220, 240, 0.03);
+    color: rgba(200, 220, 240, 0.3);
+}
+
+/* Status-based task item styling */
+.task-status-done {
+    color: rgba(200, 220, 240, 0.35);
+    text-decoration: line-through;
+}
+
+.task-status-done .task-title {
+    text-decoration: line-through;
+}
+
+.task-status-deferred {
+    color: rgba(200, 220, 240, 0.25);
+    cursor: default;
+}
+
+.task-status-in_progress {
+    color: rgba(251, 191, 36, 0.85);
+}
+
+.task-title {
+    flex: 1;
+    line-height: 1.3;
+}
+
+
+/* === TASK TYPE BADGES === */
+.task-type-badge {
+    font-size: 7px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.type-bug {
+    background: rgba(248, 113, 113, 0.15);
+    color: rgba(248, 113, 113, 0.9);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.type-feat {
+    background: rgba(167, 139, 250, 0.15);
+    color: rgba(167, 139, 250, 0.9);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+}
+
+.type-mit {
+    background: rgba(251, 146, 60, 0.15);
+    color: rgba(251, 146, 60, 0.9);
+    border: 1px solid rgba(251, 146, 60, 0.25);
+}
+
+.type-test {
+    background: rgba(74, 222, 128, 0.15);
+    color: rgba(74, 222, 128, 0.9);
+    border: 1px solid rgba(74, 222, 128, 0.25);
+}
+
+
+/* === REPO NAVIGATION PANEL === */
+.repo-nav {
+    position: fixed;
+    top: 80px;
+    left: 24px;
+    z-index: 900;
+    pointer-events: auto;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    animation: hudFadeIn 1s ease 1.2s both;
+}
+
+.repo-nav-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.repo-nav-title {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    color: rgba(0, 212, 255, 0.5);
+}
+
+.repo-nav-toggle {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(2, 4, 8, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: rgba(0, 212, 255, 0.6);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+
+.repo-nav-toggle:hover {
+    border-color: rgba(0, 212, 255, 0.5);
+    background: rgba(0, 212, 255, 0.06);
+    color: #00d4ff;
+}
+
+.repo-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.repo-nav-list.collapsed {
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    max-height: 0;
+    overflow: hidden;
+}
+
+.repo-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: rgba(2, 4, 12, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 212, 255, 0.08);
+    transition: all 0.25s ease;
+    min-width: 180px;
+}
+
+.repo-nav-item:hover {
+    background: rgba(0, 212, 255, 0.06);
+    border-color: rgba(0, 212, 255, 0.2);
+    transform: translateX(4px);
+}
+
+.repo-nav-item.active {
+    border-color: rgba(0, 212, 255, 0.35);
+    background: rgba(0, 212, 255, 0.08);
+}
+
+.repo-nav-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px currentColor;
+}
+
+.repo-nav-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.repo-nav-name {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    color: rgba(200, 220, 240, 0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.repo-nav-item.active .repo-nav-name {
+    color: rgba(0, 255, 225, 0.9);
+}
+
+.repo-nav-meta {
+    font-size: 8px;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+    color: rgba(200, 220, 240, 0.35);
+}
+
+.repo-nav-bar {
+    width: 40px;
+    height: 3px;
+    background: rgba(0, 212, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.repo-nav-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+    background: linear-gradient(90deg, rgba(0, 212, 255, 0.6), rgba(0, 255, 225, 0.7));
+}
+
+/* Scrollbar */
+.repo-nav-list::-webkit-scrollbar { width: 3px; }
+.repo-nav-list::-webkit-scrollbar-track { background: transparent; }
+.repo-nav-list::-webkit-scrollbar-thumb {
+    background: rgba(0, 212, 255, 0.15);
+    border-radius: 2px;
+}
+
+
+/* === LOADING STATE === */
+@keyframes loadPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+}
+
+.hud-stat-value {
+    animation: none;
+}
+
+.hud-stat-value:empty,
+.hud-stat-value:has(+ .loading) {
+    animation: loadPulse 1.5s ease-in-out infinite;
 }

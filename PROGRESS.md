@@ -73,3 +73,90 @@
 - Node interaction with pulse wave feedback
 - HUD + hover tooltip active
 - Files: `index.html`, `script.js`, `style.css`, `magic-plasma-sphere-three-js.markdown`, `PROGRESS.md`
+
+---
+
+## Session 4 — 2026-03-02
+
+**Summary:** Connected PM variant to Supabase daily tasks with live data, 4-state task system, and auto-refresh
+
+### What was done:
+- **Supabase integration** — Dynamic import of `config.js` with graceful fallback to sample data
+  - `fetchTodaySession()` gets today's daily session by local-tz date
+  - `fetchSessionTasks(id)` loads all tasks for the session
+  - `patchTaskStatus(id, status)` does optimistic UI + async PATCH
+  - `groupTasksByRepo(tasks)` groups flat task list into repo-based projects with nested subtasks
+- **Dynamic node rebuilding** — `buildNodes()` disposes old geometry/labels and recreates from current `projects` array
+  - Handles single-repo edge case (no division by zero in golden angle)
+  - Called on init and every refresh
+- **4-state task system** — `todo → in_progress → done → todo` click cycling
+  - Deferred tasks are frozen (no cycling)
+  - Status icons: empty (todo), animated `...` (wip), checkmark (done), arrow (deferred)
+  - Optimistic UI with Supabase revert on failure
+- **Task type badges** — `[BUG]` red, `[FEAT]` purple, `[MIT]` orange, `[TEST]` green
+- **Priority dots** — Colored circle per priority level (critical/high/medium/low)
+- **Subtask nesting** — Indented under parent with left border
+- **HUD updates** — REPOS / IN PROGRESS / COMPLETION + data source indicator (LIVE/SAMPLE)
+- **Tooltip format** — "repo-name · X/Y done (N wip)"
+- **Refresh system** — Auto-refresh every 60s when live, manual `R` key + button
+  - Preserves focused panel (re-finds repo by name after rebuild)
+  - Spin animation on refresh icon
+- **Async init** — `loadData → buildNodes → startAutoRefresh → animate`
+- **Project docs** — Created CONTEXT.md, TASKS.md, updated PROGRESS.md
+- **Config** — `config.example.js` (tracked) + `config.js` (gitignored) + `.gitignore`
+- Removed `+ Add task` button and localStorage (tasks come from Supabase now)
+
+### New files:
+- `.gitignore` — ignores `projects/config.js`
+- `projects/config.example.js` — credential template
+- `projects/config.js` — real Supabase creds (gitignored)
+- `CONTEXT.md` — project domain knowledge
+- `TASKS.md` — active task tracking
+
+### Modified files:
+- `projects/script.js` — major rewrite (data layer, dynamic nodes, panel, refresh, async init)
+- `projects/style.css` — task status styles, type badges, priority dots, subtask indent, refresh button, data source indicator
+- `projects/index.html` — HUD labels (REPOS/IN PROGRESS), removed add-task, added refresh button + data source
+- `PROGRESS.md` — this session log
+
+### Current state:
+- Serving locally via `python3 -m http.server 8090`
+- Open `http://localhost:8090/projects/index.html`
+- Falls back to sample data if `config.js` missing or Supabase unreachable
+- Live data shows repos from today's daily session with task cycling
+
+---
+
+## Session 5 — 2026-03-02
+
+**Summary:** Added repo navigation panel, debug logging for Supabase data, discovered Supabase DNS issue
+
+### What was done:
+- **Repo Navigation Panel** (left side of screen):
+  - Lists all repos with color-coded dots, names, done/total + wip stats, mini progress bars
+  - Click a repo to focus the camera on that node and open its task detail panel
+  - Active repo is visually highlighted
+  - Collapsible via hamburger button or **Tab** key
+  - **Arrow Up/Down** keyboard navigation to cycle through repos
+  - Stats update live when task statuses are cycled
+  - Rebuilds on data refresh, preserves active state
+  - CSS: frosted glass style, slide-in animation, responsive scroll
+- **Debug logging** — Console logs with `[sphere]` prefix on data fetch:
+  - Logs raw Supabase tasks array
+  - Logs each task's `id`, `title`, `repo` fields to diagnose grouping
+  - Logs grouped projects with task counts
+- **Click-outside fix** — Repo nav panel clicks no longer trigger unfocus
+- **Supabase DNS issue found** — `nkkfagxkuryusiulilqn.supabase.co` returns NXDOMAIN. Project may be paused or URL incorrect.
+
+### Modified files:
+- `projects/script.js` — repo nav logic (~80 lines), debug logs, click-outside guard, wired into focus/unfocus/refresh/init
+- `projects/style.css` — `.repo-nav*` styles (~130 lines)
+- `projects/index.html` — repo nav HTML structure
+- `CONTEXT.md` — comprehensive rewrite with full architecture docs
+- `TASKS.md` — updated with completed/in-progress/backlog sections
+- `PROGRESS.md` — this session log
+
+### Current state:
+- Supabase unreachable (DNS NXDOMAIN) — app falls back to sample data
+- Repo nav panel working with sample data (3 repos: sphere, fhe-studio, ally-api)
+- Next step: fix Supabase URL in `projects/config.js`, then verify repo grouping with live data
